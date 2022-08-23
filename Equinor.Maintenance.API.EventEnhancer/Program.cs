@@ -12,10 +12,10 @@ builder.Host.UseSerilog((ctx, lc) => lc
                                      .WriteTo.Console());
 
 builder.Services.AddOptions<AzureConfig>()
-       .Configure(_ => builder.Configuration.GetSection(nameof(AzureConfig)))
-       .Validate(config => config.AllowedWebHookOrigins is not null && config.AllowedWebHookOrigins.Any(), "AzureConfig:AllowedWebHookOrigins must be populated")
-       .Validate(config => string.IsNullOrWhiteSpace(config.ClientId), "AzureConfig:ClientId must be populated")
-       .Validate(config => string.IsNullOrWhiteSpace(config.ClientSecret), "AzureConfig:ClientSecret must be populated")
+       .Bind(builder.Configuration.GetSection(nameof(AzureConfig)))
+       .Validate(config => config.AllowedWebHookOrigins.Any(), "AzureConfig:AllowedWebHookOrigins must be populated")
+       .Validate(config => !string.IsNullOrWhiteSpace(config.ClientId), "AzureConfig:ClientId must be populated")
+       .Validate(config => !string.IsNullOrWhiteSpace(config.ClientSecret), "AzureConfig:ClientSecret must be populated")
        .ValidateOnStart();
 
 var app = builder.Build();
@@ -32,8 +32,7 @@ app.MapMethods("/", new []{"OPTIONS"},
                    ctx.Response.StatusCode = StatusCodes.Status403Forbidden; //forbidden makes more sense than 405
 
                    if (!ctx.Request.Headers.TryGetValue("WebHook-Request-Origin", out var webHookOrigin)
-                       || azureConfig.Value.AllowedWebHookOrigins is not null 
-                       && !azureConfig.Value.AllowedWebHookOrigins.Contains(webHookOrigin.ToString())) return Task.CompletedTask;
+                       || !azureConfig.Value.AllowedWebHookOrigins.Contains(webHookOrigin.ToString())) return Task.CompletedTask;
                    
                    
                    ctx.Response.Headers.Allow       = new StringValues("GET");
