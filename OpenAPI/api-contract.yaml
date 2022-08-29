@@ -1,0 +1,144 @@
+openapi: 3.0.1
+info:
+  title: Maintenance API - Event Driven Internal
+  description: |
+    # Overview
+    Maintenance API - Event Driven Internal is an internal API used in the event driven solution for Maintenance API. 
+
+    The consumer facing documentation is available at https://equinor.github.io/maintenance-api-event-driven-docs/
+  version: "0.1.0"
+  contact:
+    name: Maintenance API Team - TDI FOIT CON PDP
+    url: https://github.com/equinor/maintenance-api-docs
+  
+  license:
+    name: MIT
+    url: http://www.opensource.org/licenses/mit-license.html 
+  
+servers:
+  - url: https://api-dev.gateway.equinor.com/maintenance-api-event-driven-internal
+    description: Test environment  
+  - url: https://api-test.gateway.equinor.com/maintenance-api-event-driven-internal
+    description: QA environment
+  - url: https://api.gateway.equinor.com/maintenance-api-event-driven-internal
+    description: Production environment
+
+paths:
+  /maintenance-events:
+    options:
+      summary: Maintenance events - Handshake
+      description: |
+        ### Overview
+        Handshake 
+      operationId: MaintenanceEventHandshake
+      parameters:   
+      - in: header
+        name: WebHook-Request-Origin
+        description: Hostname for the event publisher - Must match allow list for environment in order to be successful
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Handshake successful
+          headers:
+            'WebHook-Allowed-Origin':
+               description: Allowed origin (should match what value of `WebHook-Request-Origin` in request)
+               schema:
+                type: string
+            'Allow':
+                description: Allowed HTTP methods for this endpoint
+                example: 'POST'
+                schema:
+                 type: string
+        '403':
+          description: Handshake unsuccessful
+    post:
+      summary: Maintenance events - Publish
+      description: |
+        ### Overview
+        Publish maintenance event.
+      operationId: MaintenanceEventPublish
+      requestBody:
+        description: Measuring point to create
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MaintenanceEventPublish'      
+      responses:
+        '201':
+          description: Maintenance event published
+        '400':
+          description: Bad request - Event ignored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          description: Maintenance event could not be processed due to internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+components:
+  schemas:
+    ProblemDetails:
+      type: object
+      properties:
+        type:
+          type: string
+          description: Reference to HTTP status definition
+          example: 'https://tools.ietf.org/html/rfc7231#section-6.5.1'
+          nullable: true
+        title:
+          type: string
+          description: Description of error
+          example: 'One or more validation errors occurred.'
+          nullable: true
+        status:
+          type: integer
+          description: HTTP status code
+          example: 400
+          format: int32
+          nullable: true
+        traceId:
+          type: string
+          description: Request id to be used for support
+          example: '00-d9dc368e6caec4449a64e798dad1b5b2-7d82bdde82c9474a-00'
+        errors:
+          type: object
+          description: Detailed information about error
+          additionalProperties:
+            type: object
+            additionalProperties: false
+          nullable: true
+          readOnly: true
+      
+    MaintenanceEventPublish:
+      type: object
+      properties:
+        specversion:
+          type: string
+          example: '1.0'
+        type:
+          type: string
+          example: 'equinor.sbx.btp.workordercreated'
+        id:
+          type: string
+          example: 'WORKORDER_CREATE20220811120844.9753950 '
+        time:
+          type: string
+          example: '2022-08-11T12:08:44.975Z'
+        data:
+          type: object
+          properties:
+            objectType:
+              type: string
+              example: 'BUS2007'
+            event:
+              type: string
+              example: 'CREATED'
+            objectId:
+              type: string
+              example: '000020012032'
