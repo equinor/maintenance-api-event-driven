@@ -1,5 +1,6 @@
 using System.Net.Mime;
 using Equinor.Maintenance.API.EventEnhancer.ConfigSections;
+using Equinor.Maintenance.API.EventEnhancer.Constants;
 using Equinor.Maintenance.API.EventEnhancer.Logging;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
@@ -26,7 +27,7 @@ builder.Services.AddOptions<AzureAd>()
        .Validate(config => !string.IsNullOrWhiteSpace(config.ClientId), "AzureConfig:ClientId must be populated")
        .Validate(config => !string.IsNullOrWhiteSpace(config.ClientSecret), "AzureConfig:ClientSecret must be populated")
        .ValidateOnStart();
-
+builder.Services.AddScoped<LogOriginHeader>();
 
 builder.Services
        .AddMicrosoftIdentityWebApiAuthentication(builder.Configuration, 
@@ -35,27 +36,28 @@ builder.Services
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
+app.UseMiddleware<LogOriginHeader>();
 app.UseHttpsRedirection();
 
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapGet("/", () => new OkObjectResult("Hello from Mini Api"))
+app.MapPost("/maintenance-events", () => new OkObjectResult("Hello from Mini Api"))
 .WithName("HelloApi");
 
-app.MapMethods("/", new []{"OPTIONS"},
+app.MapMethods("/maintenance-events", new []{HttpMethod.Options.ToString()},
                (IOptions<AzureAd> azureConfig, HttpContext ctx) =>
                {
                    ctx.Response.StatusCode = StatusCodes.Status403Forbidden; //forbidden makes more sense than 405
 
-                   if (!ctx.Request.Headers.TryGetValue("WebHook-Request-Origin", out var webHookOrigin)
+                   if (!ctx.Request.Headers.TryGetValue(Names.WebHookRequestHeader, out var webHookOrigin)
                        || !azureConfig.Value.AllowedWebHookOrigins.Contains(webHookOrigin.ToString())) return Task.CompletedTask;
                    
                    
-                   ctx.Response.Headers.Allow       = new StringValues("GET");
+                   ctx.Response.Headers.Allow       = new StringValues(HttpMethod.Post.ToString());
                    ctx.Response.Headers.ContentType = new StringValues(MediaTypeNames.Application.Json);
                    ctx.Response.StatusCode          = StatusCodes.Status200OK;
-                   ctx.Response.Headers.TryAdd("WebHook-Allowed-Origin", webHookOrigin);
+                   ctx.Response.Headers.TryAdd(Names.WebHookAllowHeader, webHookOrigin);
 
                    return Task.CompletedTask;
                })
