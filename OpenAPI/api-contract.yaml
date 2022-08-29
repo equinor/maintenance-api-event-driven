@@ -46,6 +46,11 @@ paths:
                description: Allowed origin (should match what value of `WebHook-Request-Origin` in request)
                schema:
                 type: string
+                            'Allow':
+                description: Allowed HTTP methods for this endpoint
+                example: POST
+                schema:
+                 type: string
         '403':
           description: Handshake unsuccessful
     post:
