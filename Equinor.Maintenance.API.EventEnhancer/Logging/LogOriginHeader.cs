@@ -12,7 +12,7 @@ public class LogOriginHeader : IMiddleware
         await next.Invoke(context);
         
         if (context.Request.Headers.TryGetValue(Names.WebHookRequestHeader, out var webHookOrigin)) 
-            _logger.LogTrace("Header Web-Hook-Origin: {WebHookOrigin}", webHookOrigin);
+            _logger.LogTrace("Header {HeaderName}: {WebHookOrigin}", Names.WebHookRequestHeader,webHookOrigin);
         else
             _logger.LogWarning("Could not find header: {HeaderName}", Names.WebHookRequestHeader);
         
