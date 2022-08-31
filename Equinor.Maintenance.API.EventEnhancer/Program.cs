@@ -82,11 +82,7 @@ const string pattern = "/maintenance-events";
 app.MapPost(pattern,
             async (ServiceBusClient serviceBus, [FromBody] MaintenanceEventPublish body) =>
             {
-                var maintenanceEvent = new ServiceBusMessage(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(body)));
-                var sender           = serviceBus.CreateSender("maintenance-events");
-                await sender.SendMessageAsync(maintenanceEvent);
-                await sender.CloseAsync();
-                var jsonobj = new JsonObject { { "WorkOrderId", "123123123" } };
+                var jsonobj = new JsonObject { { "WorkOrderId", body.Id } };
                 var messageToHook = new MaintenanceEventHook("1.0",
                                                              "com.equinor.maintenance-events.sas-change-work-orders.created",
                                                              "A1234-2134",
@@ -95,6 +91,12 @@ app.MapPost(pattern,
                                                              "https://equinor.github.io/maintenance-api-event-driven-docs/#tag/SAS-Change-Work-orders",
                                                              MediaTypeNames.Application.Json,
                                                              jsonobj);
+                var maintenanceEvent = new ServiceBusMessage(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(messageToHook)));
+                var sender           = serviceBus.CreateSender("maintenance-events");
+                await sender.SendMessageAsync(maintenanceEvent);
+                await sender.CloseAsync();
+              
+
 
                 return new CreatedResult(string.Empty, messageToHook);
             })
