@@ -24,7 +24,8 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddTransient<HttpContextEnricher>();
 builder.Services.AddHttpContextAccessor();
-builder.Services.AddApplicationInsightsTelemetry(opts => opts.ConnectionString = builder.Configuration.GetConnectionString("ApplicationInsights"));
+builder.Services.AddApplicationInsightsTelemetry(opts => opts.ConnectionString
+                                                     = builder.Configuration.GetConnectionString(nameof(ConnectionStrings.ApplicationInsights)));
 builder.Host.UseSerilog((_, services, lc) =>
                         {
                             lc
@@ -48,7 +49,9 @@ builder.Services.AddScoped<LogOriginHeader>();
 builder.Services.AddMicrosoftIdentityWebApiAuthentication(builder.Configuration,
                                                           subscribeToJwtBearerMiddlewareDiagnosticsEvents: builder.Environment.IsDevelopment());
 
-builder.Services.AddAzureClients(clientBuilder => clientBuilder.AddServiceBusClient(builder.Configuration.GetConnectionString("ServiceBus")));
+builder.Services.AddAzureClients(clientBuilder =>
+                                     clientBuilder.AddServiceBusClient(builder.Configuration
+                                                                              .GetConnectionString(nameof(ConnectionStrings.ServiceBus))));
 
 //builder.Services.Configure<JsonOptions>(opts => opts.JsonSerializerOptions.);
 
@@ -76,13 +79,12 @@ app.Use(async (ctx, next) =>
                 ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
         });
 
-//var pattern = $"{(app.Environment.IsDevelopment() ? string.Empty : "/maintenance-api-event-driven-internal")}/maintenance-events";
 const string pattern = "/maintenance-events";
 
 app.MapPost(pattern,
             async (ServiceBusClient serviceBus, [FromBody] MaintenanceEventPublish body) =>
             {
-                var jsonobj = new JsonObject { { "WorkOrderId", body.Id } };
+                var jsonobj    = new JsonObject { { "WorkOrderId", body.Id } };
                 var messageToHook = new MaintenanceEventHook("1.0",
                                                              "com.equinor.maintenance-events.sas-change-work-orders.created",
                                                              "A1234-2134",
@@ -92,11 +94,9 @@ app.MapPost(pattern,
                                                              MediaTypeNames.Application.Json,
                                                              jsonobj);
                 var maintenanceEvent = new ServiceBusMessage(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(messageToHook)));
-                var sender           = serviceBus.CreateSender("maintenance-events");
+                var sender           = serviceBus.CreateSender(Names.Topic);
                 await sender.SendMessageAsync(maintenanceEvent);
                 await sender.CloseAsync();
-              
-
 
                 return new CreatedResult(string.Empty, messageToHook);
             })
@@ -105,7 +105,7 @@ app.MapPost(pattern,
 
 app.MapMethods(pattern,
                new[] { HttpMethod.Options.ToString() },
-               (IOptions<AzureAd> azureConfig, HttpContext ctx) =>
+               ctx =>
                {
                    //ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
 
