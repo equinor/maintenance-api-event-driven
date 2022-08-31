@@ -60,7 +60,7 @@ paths:
         Publish maintenance event.
       operationId: MaintenanceEventPublish
       requestBody:
-        description: Measuring point to create
+        description: Maintenance Event from source Event Mesh system
         required: true
         content:
           application/json:
