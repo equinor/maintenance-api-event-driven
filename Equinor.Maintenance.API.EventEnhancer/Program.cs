@@ -1,59 +1,76 @@
 using System.Net.Mime;
-using System.Text;
-using System.Text.Json;
-using System.Text.Json.Nodes;
-using System.Text.Json.Serialization;
-using Azure.Messaging.ServiceBus;
+using Azure.Identity;
 using Equinor.Maintenance.API.EventEnhancer.ConfigSections;
 using Equinor.Maintenance.API.EventEnhancer.Constants;
+using Equinor.Maintenance.API.EventEnhancer.Handlers;
 using Equinor.Maintenance.API.EventEnhancer.Logging;
+using Equinor.Maintenance.API.EventEnhancer.Middlewares;
 using Equinor.Maintenance.API.EventEnhancer.Models;
+using MediatR;
 using Microsoft.ApplicationInsights.Extensibility;
-using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Azure;
-using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Primitives;
 using Microsoft.Identity.Web;
-using Microsoft.IdentityModel.Logging;
 using Serilog;
 using Serilog.Events;
 
 var builder = WebApplication.CreateBuilder(args);
 
+var services    = builder.Services;
+var config      = builder.Configuration;
+var environment = builder.Environment;
+
 // Add services to the container.
-builder.Services.AddTransient<HttpContextEnricher>();
-builder.Services.AddHttpContextAccessor();
-builder.Services.AddApplicationInsightsTelemetry(opts => opts.ConnectionString
-                                                     = builder.Configuration.GetConnectionString(nameof(ConnectionStrings.ApplicationInsights)));
-builder.Host.UseSerilog((_, services, lc) =>
+services.AddOptions<AzureAd>()
+        .Bind(config.GetSection(nameof(AzureAd)))
+        //.Validate(ad => ad.AllowedWebHookOrigins.Any(), "AllowedWebHookOrigins must be populated")
+        .Validate(ad => !string.IsNullOrWhiteSpace(ad.ClientId), "ClientId must be populated")
+        .Validate(ad => !string.IsNullOrWhiteSpace(ad.ClientSecret), "ClientSecret must be populated")
+        .Validate(ad => !string.IsNullOrWhiteSpace(ad.TenantId), "TenantId must be populated")
+        .Validate(ad => !string.IsNullOrWhiteSpace(ad.Instance), "Instance must be populated")
+        .ValidateOnStart();
+
+var azureAd = config.GetSection(nameof(AzureAd)).Get<AzureAd>();
+Environment.SetEnvironmentVariable("AZURE_TENANT_ID", azureAd.TenantId);
+Environment.SetEnvironmentVariable("AZURE_CLIENT_ID", azureAd.ClientId);
+Environment.SetEnvironmentVariable("AZURE_CLIENT_SECRET", azureAd.ClientSecret);
+var kvUrl = config.GetConnectionString(nameof(ConnectionStrings.KeyVault));
+config["AzureAd:ClientCertificates:0:KeyVaultUrl"] = kvUrl;
+
+config.AddAzureKeyVault(new Uri(kvUrl), new EnvironmentCredential());
+
+services.AddTransient<HttpContextEnricher>();
+services.AddHttpContextAccessor();
+services.AddApplicationInsightsTelemetry(opts => opts.ConnectionString
+                                             = config.GetConnectionString(nameof(ConnectionStrings.ApplicationInsights)));
+builder.Host.UseSerilog((_, svcs, lc) =>
                         {
                             lc
                                 .Enrich.FromLogContext()
-                                .Enrich.With(services.GetRequiredService<HttpContextEnricher>())
+                                .Enrich.With(svcs.GetRequiredService<HttpContextEnricher>())
                                 .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj} by user {User}{NewLine}{Exception}")
-                                .WriteTo.ApplicationInsights(services.GetRequiredService<TelemetryConfiguration>(),
+                                .WriteTo.ApplicationInsights(svcs.GetRequiredService<TelemetryConfiguration>(),
                                                              TelemetryConverter.Traces,
                                                              restrictedToMinimumLevel: LogEventLevel.Warning);
                         });
 
-builder.Services.AddOptions<AzureAd>()
-       .Bind(builder.Configuration.GetSection(nameof(AzureAd)))
-       .Validate(config => config.AllowedWebHookOrigins.Any(), "AllowedWebHookOrigins must be populated")
-       .Validate(config => !string.IsNullOrWhiteSpace(config.ClientId), "ClientId must be populated")
-       .Validate(config => !string.IsNullOrWhiteSpace(config.ClientSecret), "ClientSecret must be populated")
-       .ValidateOnStart();
+services.AddScoped<LogOriginHeader>();
+services.AddScoped<OriginCheck>();
 
-builder.Services.AddScoped<LogOriginHeader>();
+services.AddMicrosoftIdentityWebApiAuthentication(config, subscribeToJwtBearerMiddlewareDiagnosticsEvents: environment.IsDevelopment())
+        .EnableTokenAcquisitionToCallDownstreamApi()
+        .AddDownstreamWebApi(Names.MainteanceApi,
+                             opts =>
+                             {
+                                 opts.BaseUrl = config.GetConnectionString(nameof(ConnectionStrings.MaintenanceApi));
+                                 opts.Scopes  = $"{config["MaintenanceApiClientId"]}/.default";
+                             })
+        .AddInMemoryTokenCaches();
 
-builder.Services.AddMicrosoftIdentityWebApiAuthentication(builder.Configuration,
-                                                          subscribeToJwtBearerMiddlewareDiagnosticsEvents: builder.Environment.IsDevelopment());
-
-builder.Services.AddAzureClients(clientBuilder =>
-                                     clientBuilder.AddServiceBusClient(builder.Configuration
-                                                                              .GetConnectionString(nameof(ConnectionStrings.ServiceBus))));
-
-//builder.Services.Configure<JsonOptions>(opts => opts.JsonSerializerOptions.);
+services.AddAzureClients(clientBuilder => clientBuilder.AddServiceBusClient(config.GetConnectionString(nameof(ConnectionStrings.ServiceBus))));
+services.AddMediatR(typeof(Program));
 
 var app = builder.Build();
 
@@ -64,42 +81,13 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.Use(async (ctx, next) =>
-        {
-            var azureConfig = ctx.RequestServices.GetRequiredService<IOptions<AzureAd>>();
-
-            if (ctx.Request.Headers.TryGetValue(Names.WebHookRequestHeader, out var webHookOrigin)
-                && azureConfig.Value.AllowedWebHookOrigins.Contains(webHookOrigin.ToString()))
-            {
-                ctx.Response.Headers.TryAdd(Names.WebHookAllowHeader, webHookOrigin);
-
-                await next.Invoke(ctx);
-            }
-            else
-                ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
-        });
+app.UseMiddleware<OriginCheck>();
 
 const string pattern = "/maintenance-events";
 
 app.MapPost(pattern,
-            async (ServiceBusClient serviceBus, [FromBody] MaintenanceEventPublish body) =>
-            {
-                var jsonobj    = new JsonObject { { "WorkOrderId", body.Id } };
-                var messageToHook = new MaintenanceEventHook("1.0",
-                                                             "com.equinor.maintenance-events.sas-change-work-orders.created",
-                                                             "A1234-2134",
-                                                             "2022-09-01T12:32:00Z",
-                                                             "123456",
-                                                             "https://equinor.github.io/maintenance-api-event-driven-docs/#tag/SAS-Change-Work-orders",
-                                                             MediaTypeNames.Application.Json,
-                                                             jsonobj);
-                var maintenanceEvent = new ServiceBusMessage(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(messageToHook)));
-                var sender           = serviceBus.CreateSender(Names.Topic);
-                await sender.SendMessageAsync(maintenanceEvent);
-                await sender.CloseAsync();
-
-                return new CreatedResult(string.Empty, messageToHook);
-            })
+            async ([FromBody] MaintenanceEventPublish body, IMediator mediator, CancellationToken cancelToken) =>
+                new CreatedResult(string.Empty, await mediator.Send(new PublishMaintenanceEventQuery(body), cancelToken)))
    .WithName("MaintenanceEventPublish")
    .RequireAuthorization();
 
@@ -107,15 +95,9 @@ app.MapMethods(pattern,
                new[] { HttpMethod.Options.ToString() },
                ctx =>
                {
-                   //ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
-
-                   //if (!ctx.Request.Headers.TryGetValue(Names.WebHookRequestHeader, out var webHookOrigin)
-                   //    || !azureConfig.Value.AllowedWebHookOrigins.Contains(webHookOrigin.ToString())) return Task.CompletedTask;
-
                    ctx.Response.Headers.Allow       = new StringValues(HttpMethod.Post.ToString());
                    ctx.Response.Headers.ContentType = new StringValues(MediaTypeNames.Application.Json);
                    ctx.Response.StatusCode          = StatusCodes.Status200OK;
-                   //ctx.Response.Headers.TryAdd(Names.WebHookAllowHeader, webHookOrigin);
 
                    return Task.CompletedTask;
                })

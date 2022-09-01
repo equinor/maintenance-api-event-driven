@@ -1,6 +1,6 @@
 using Equinor.Maintenance.API.EventEnhancer.Constants;
 
-namespace Equinor.Maintenance.API.EventEnhancer.Logging;
+namespace Equinor.Maintenance.API.EventEnhancer.Middlewares;
 
 public class LogOriginHeader : IMiddleware
 {
