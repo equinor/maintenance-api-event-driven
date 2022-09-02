@@ -66,8 +66,7 @@ services.AddMicrosoftIdentityWebApiAuthentication(config, subscribeToJwtBearerMi
                              {
                                  opts.BaseUrl = config.GetConnectionString(nameof(ConnectionStrings.MaintenanceApi));
                                  opts.Scopes  = $"{config["MaintenanceApiClientId"]}/.default";
-                             })
-        .AddInMemoryTokenCaches();
+                             }).AddInMemoryTokenCaches();
 
 services.AddAzureClients(clientBuilder => clientBuilder.AddServiceBusClient(config.GetConnectionString(nameof(ConnectionStrings.ServiceBus))));
 services.AddMediatR(typeof(Program));
