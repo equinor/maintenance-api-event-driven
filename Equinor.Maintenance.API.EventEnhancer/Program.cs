@@ -8,7 +8,6 @@ using Equinor.Maintenance.API.EventEnhancer.Middlewares;
 using Equinor.Maintenance.API.EventEnhancer.Models;
 using MediatR;
 using Microsoft.ApplicationInsights.Extensibility;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Azure;
 using Microsoft.Extensions.Primitives;
@@ -44,7 +43,7 @@ config.AddAzureKeyVault(new Uri(kvUrl), new EnvironmentCredential());
 services.AddTransient<HttpContextEnricher>();
 services.AddHttpContextAccessor();
 services.AddApplicationInsightsTelemetry(opts => opts.ConnectionString
-                                             = config.GetConnectionString(nameof(ConnectionStrings.ApplicationInsights)));
+                                       = config.GetConnectionString(nameof(ConnectionStrings.ApplicationInsights)));
 builder.Host.UseSerilog((_, svcs, lc) =>
                         {
                             lc
@@ -67,7 +66,7 @@ services.AddMicrosoftIdentityWebApiAuthentication(config, subscribeToJwtBearerMi
                                  opts.BaseUrl = config.GetConnectionString(nameof(ConnectionStrings.MaintenanceApi));
                                  opts.Scopes  = $"{config["MaintenanceApiClientId"]}/.default";
                              }).AddInMemoryTokenCaches();
-
+//new X509Certificate2(Convert.FromBase64String(config.GetValue<string>("AuthCertForMaintenanceApi")));
 services.AddAzureClients(clientBuilder => clientBuilder.AddServiceBusClient(config.GetConnectionString(nameof(ConnectionStrings.ServiceBus))));
 services.AddMediatR(typeof(Program));
 

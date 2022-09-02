@@ -1,4 +1,3 @@
-using System.Net.Mime;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -33,41 +32,55 @@ public class PublishMaintenanceEvent : IRequestHandler<PublishMaintenanceEventQu
 
     public async Task<MaintenanceEventHook> Handle(PublishMaintenanceEventQuery query, CancellationToken cancellationToken)
     {
-        var    builder  = new WorkorderRequestBuilder();
         var    data     = query.MaintenanceEventPublish.Data;
         var    objectId = data.ObjectId.TrimStart('0');
         string request;
-        var    sourcePart = string.Empty;
-        var    type       = string.Empty;
+        var    sourcePart = "https://equinor.github.io/maintenance-api-event-driven-docs/#tag/{0}";
+        var    type       = "com.equinor.maintenance-events.{0}";
+        
         switch (data)
         {
-            case (_, "BUS2007", var eventType):
-                request = builder.BuildCorrectiveLookup(objectId);
-                switch (eventType)
-                {
-                    case "CREATED":
-                        sourcePart = "CorrectiveWorkOrder";
-                        type       = "com.equinor.maintenance-events.corrective-work-orders.created";
-
-                        break;
-                }
+            case (_, "BUS2007", var @event):
+                request = WorkorderRequestBuilder.BuildCorrectiveLookup(objectId); 
+                CheckEventAndSetProps(@event, "corrective-work-order");
 
                 break;
+            case (_, "BUS2078", var @event):
+                request = MaintenanceRecordsRequestBuilder.BuildActivityReportLookup(objectId);
+                CheckEventAndSetProps(@event, "activity-report");
+
+                break;
+            //note add more cases for mor bus events as mappings become known.
             default:
                 throw new ArgumentOutOfRangeException(nameof(data));
         }
+        void CheckEventAndSetProps(string @event, string input)
+        {
+            switch (@event)
+            {
+                case "CREATED":
+                    SetMetaData(ref type, ref sourcePart, $"{input}.created");
 
-        var result = await _dsApi.CallWebApiForAppAsync(Names.MainteanceApi,
-                                                        opts =>
-                                                        {
-                                                            opts.RelativePath = request;
-                                                        });
+                    break;
+                case "RELEASED":
+                    SetMetaData(ref type, ref sourcePart, $"{input}.released");
+
+                    break;
+                case "ZCHANGED":
+                    SetMetaData(ref type, ref sourcePart, $"{input}.changed");
+
+                    break;
+            }
+
+        }
+
+        var result = await _dsApi.CallWebApiForAppAsync(Names.MainteanceApi, opts => opts.RelativePath = request);
         var messageToHook = new MaintenanceEventHook("1.0",
                                                      type,
-                                                     "A1234-2134",
-                                                     "2022-09-01T12:32:00Z",
+                                                     query.MaintenanceEventPublish.Id,
+                                                     query.MaintenanceEventPublish.Time,
                                                      objectId,
-                                                     $"https://equinor.github.io/maintenance-api-event-driven-docs/#tag/{sourcePart}",
+                                                     sourcePart,
                                                      await result.Content.ReadFromJsonAsync<JsonObject>(cancellationToken: cancellationToken));
         var maintenanceEvent = new ServiceBusMessage(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(messageToHook)));
         var sender           = _serviceBus.CreateSender(Names.Topic);
@@ -75,5 +88,11 @@ public class PublishMaintenanceEvent : IRequestHandler<PublishMaintenanceEventQu
         await sender.CloseAsync(cancellationToken);
 
         return messageToHook;
+    }
+
+    private void SetMetaData(ref string typeInput, ref string sourceInput, string input)
+    {
+        typeInput   = string.Format(typeInput, input);
+        sourceInput = string.Format(sourceInput, typeInput);
     }
 }
