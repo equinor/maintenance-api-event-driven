@@ -17,14 +17,31 @@ public class WorkorderRequestBuilder
 
     public static string BuildCorrectiveLookup(string workOrderId)
     {
-        var uriWithValues = string.Format(Uri, "corrective-work-orders", workOrderId);
-        var correctiveQueryParams = CommonQueryParams.Concat(new Dictionary<string, string?>
+        var queryParams = CommonQueryParams.Concat(new Dictionary<string, string?>
                                                              {
                                                                  { "include-maintenance-records", "true" },
                                                                  { "include-tag-details", "true" },
                                                                  { "include-technical-feedback", "true" }
                                                              });
-        return QueryHelpers.AddQueryString(uriWithValues, correctiveQueryParams);
+        return QueryHelpers.AddQueryString(string.Format(Uri, "corrective-work-orders", workOrderId), queryParams);
+    }
+    public static string BuildSasChangeLookup(string workOrderId)
+    {
+        var queryParams = CommonQueryParams.Concat(new Dictionary<string, string?>
+                                                             {
+                                                                 { "include-tag-details", "true" }
+                                                             });
+        return QueryHelpers.AddQueryString(string.Format(Uri, "sas-change-work-orders", workOrderId), queryParams);
+    }
+    public static string BuildProjectLookup(string workOrderId)
+    {
+        var queryParams = CommonQueryParams.Concat(new Dictionary<string, string?>
+                                                             {
+                                                                 { "include-maintenance-records", "true" },
+                                                                 { "include-tag-details", "true" },
+                                                                 { "include-technical-feedback", "true" }
+                                                             });
+        return QueryHelpers.AddQueryString(string.Format(Uri, "project-work-orders", workOrderId), queryParams);
     }
 
 

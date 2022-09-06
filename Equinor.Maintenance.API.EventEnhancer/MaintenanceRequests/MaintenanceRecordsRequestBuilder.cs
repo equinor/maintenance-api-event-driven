@@ -6,21 +6,35 @@ public class MaintenanceRecordsRequestBuilder
 {
     private const string Uri = "maintenance-records/{0}/{1}";
     private static readonly Dictionary<string, string?> CommonQueryParams = new()
-                                                                      {
-                                                                          { "api-version", "v1" },
-                                                                          { "include-attachments", "true" },
-                                                                          { "include-status-details", "true" },
-                                                                          { "include-created-by-details", "false" } //note double check this value
-                                                                      };
+                                                                            {
+                                                                                { "api-version", "v1" },
+                                                                                { "include-attachments", "true" },
+                                                                                { "include-status-details", "true" },
+                                                                                { "include-created-by-details", "false" } 
+                                                                            };
 
-    public static string BuildActivityReportLookup(string objectId)
+    public static string BuildActivityReportLookup(string recordId)
     {
-        var activityParams = CommonQueryParams.Concat(new Dictionary<string, string?>
-                                                       {
-                                                           { "include-activities", "true" },
-                                                           { "include-references", "true" }
-                                                       });
+        var queryParams = CommonQueryParams.Concat(new Dictionary<string, string?>
+                                                      {
+                                                          { "include-activities", "true" },
+                                                          { "include-url-references", "true" }
+                                                      });
 
-        return QueryHelpers.AddQueryString(string.Format(Uri, "activity-reports", objectId), activityParams);
+        return QueryHelpers.AddQueryString(string.Format(Uri, "activity-reports", recordId), queryParams);
+    }
+
+    public static string BuildFailureReportLookup(string recordId)
+    {
+        var queryParams = CommonQueryParams.Concat(new Dictionary<string, string?>
+                                                     {
+                                                         { "include-activities", "true" },
+                                                         { "include-url-references", "true" },
+                                                         { "include-tag-details", "true" },
+                                                         { "include-tasks", "true" },
+                                                         { "include-additional-metadata", "true" }
+                                                     });
+
+        return QueryHelpers.AddQueryString(string.Format(Uri, "failure-reports", recordId), queryParams);
     }
 }
