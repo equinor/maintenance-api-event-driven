@@ -12,7 +12,6 @@ FROM mcr.microsoft.com/dotnet/aspnet:6.0-bullseye-slim-amd64
 WORKDIR /app
 COPY --from=build-env /publish/out .
 
-ENV USE_ENVIRONMENT_CREDENTIAL true
 ENV USE_RADIX_CERT_HEADERNAME true
 ENV ASPNETCORE_URLS "http://0.0.0.0:5005"
 EXPOSE  5005
