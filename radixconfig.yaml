@@ -9,7 +9,7 @@ spec:
         from: main
   components:
     - name: api
-      dockerfileName: Equinor.Maintenance.API.EventEnhancer/Dockerfile
+      src: Equinor.Maintenance.API.EventEnhancer
       publicPort: http
       ports:
         - name: http
