@@ -23,7 +23,7 @@ spec:
       ingressConfiguration:
         - leastconnectedlb
       environmentConfig:
-        - environment: test
+        - environment: development
           authentication:
             clientCertificate:
               verification: "on"
