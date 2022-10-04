@@ -4,7 +4,7 @@ metadata:
   name: maintenance-api-event-enhancer
 spec:
   environments:
-    - name: test
+    - name: development
       build:
         from: main
     - name: qa

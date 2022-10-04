@@ -14,7 +14,8 @@ COPY --from=build-env /publish/out .
 
 ENV USE_ENVIRONMENT_CREDENTIAL true
 ENV USE_RADIX_CERT_HEADERNAME true
-EXPOSE  5000
+ENV ASPNETCORE_URLS "http://0.0.0.0:5005"
+EXPOSE  5005
 USER 9000
 
 ENTRYPOINT ["dotnet", "Equinor.Maintenance.API.EventEnhancer.dll"]
