@@ -20,10 +20,6 @@ spec:
         - leastconnectedlb
       environmentConfig:
         - environment: development
-          authentication:
-            clientCertificate:
-              verification: "on"
-              passCertificateToUpstream: true
           variables:
             ASPNETCORE_ENVIRONMENT: "Development"
     
