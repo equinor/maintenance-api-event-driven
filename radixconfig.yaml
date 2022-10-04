@@ -1,0 +1,62 @@
+apiVersion: radix.equinor.com/v1
+kind: RadixApplication
+metadata:
+  name: maintenance-api-event-enhancer
+spec:
+  environments:
+    - name: test
+      build:
+        from: main
+    - name: qa
+      build:
+        from: hf/**/*
+    - name: prod
+  components:
+    - name: api
+      dockerfileName: Equinor.Maintenance.API.EventEnhancer/Dockerfile
+      publicPort: http
+      ports:
+        - name: http
+          port: 5000
+      secrets:
+        - ClientSecret
+      ingressConfiguration:
+        - leastconnectedlb
+      environmentConfig:
+        - environment: test
+          authentication:
+            clientCertificate:
+              verification: "on"
+              passCertificateToUpstream: true
+          variables:
+            ASPNETCORE_ENVIRONMENT: "test"
+        - environment: qa
+          horizontalScaling:
+            minReplicas: 2
+            maxReplicas: 3
+          resources:
+            requests:
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+          authentication:
+            clientCertificate:
+              verification: "on"
+              passCertificateToUpstream: true
+          variables:
+            ASPNETCORE_ENVIRONMENT: "qa"
+        - environment: prod
+          horizontalScaling:
+            minReplicas: 2
+            maxReplicas: 4
+          resources:
+            requests:
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+          authentication:
+            clientCertificate:
+              verification: "on"
+              passCertificateToUpstream: true
+          variables:
+            ASPNETCORE_ENVIRONMENT: "prod"
