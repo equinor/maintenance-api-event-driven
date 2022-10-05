@@ -1,13 +1,20 @@
 using System.Text;
 using Equinor.Maintenance.API.EventEnhancer.Constants;
+using Serilog.Core;
+using Serilog.Events;
 
 namespace Equinor.Maintenance.API.EventEnhancer.Middlewares;
 
 public class LogOriginHeader : IMiddleware
 {
     private readonly ILogger<LogOriginHeader> _logger;
+    private readonly LoggingLevelSwitch _logSwitch;
 
-    public LogOriginHeader(ILogger<LogOriginHeader> logger) { _logger = logger; }
+    public LogOriginHeader(ILogger<LogOriginHeader> logger, LoggingLevelSwitch logSwitch)
+    {
+        _logger         = logger;
+        _logSwitch = logSwitch;
+    }
     public async Task InvokeAsync(HttpContext context, RequestDelegate next)
     {
         var request = context.Request;
@@ -18,7 +25,8 @@ public class LogOriginHeader : IMiddleware
         }
         finally
         {
-            request.Body.Position = 0;
+            _logSwitch.MinimumLevel = LogEventLevel.Verbose;
+            request.Body.Position   = 0;
             var buffer = new byte[Convert.ToInt32(request.ContentLength)];
             var unused = await request.Body.ReadAsync(buffer, 0, buffer.Length);
             //get body string here...
@@ -29,6 +37,7 @@ public class LogOriginHeader : IMiddleware
                 _logger.LogTrace("Header {HeaderName}: {WebHookOrigin}", Names.WebHookRequestHeader,webHookOrigin);
             else
                 _logger.LogWarning("Could not find header: {HeaderName}", Names.WebHookRequestHeader);
+            _logSwitch.MinimumLevel = LogEventLevel.Warning;
         }
     }
 }

@@ -14,12 +14,13 @@ using Microsoft.Extensions.Azure;
 using Microsoft.Extensions.Primitives;
 using Microsoft.Identity.Web;
 using Serilog;
+using Serilog.Core;
 using Serilog.Events;
 
 var builder = WebApplication.CreateBuilder(args);
 
-var services    = builder.Services;
-var config      = builder.Configuration;
+var services = builder.Services;
+var config   = builder.Configuration;
 //var environment = builder.Environment;
 
 // Add services to the container.
@@ -39,36 +40,44 @@ Environment.SetEnvironmentVariable("AZURE_CLIENT_SECRET", azureAd.ClientSecret);
 var kvUrl = config.GetConnectionString(nameof(ConnectionStrings.KeyVault));
 config["AzureAd:ClientCertificates:0:KeyVaultUrl"] = kvUrl;
 
-config.AddAzureKeyVault(new Uri(kvUrl), new EnvironmentCredential(), new AzureKeyVaultConfigurationOptions{ReloadInterval = TimeSpan.FromHours(0.5)});
+config.AddAzureKeyVault(new Uri(kvUrl),
+                        new EnvironmentCredential(),
+                        new AzureKeyVaultConfigurationOptions { ReloadInterval = TimeSpan.FromHours(0.5) });
 
 services.AddTransient<HttpContextEnricher>();
 services.AddHttpContextAccessor();
 services.AddApplicationInsightsTelemetry(opts => opts.ConnectionString
-                                       = config.GetConnectionString(nameof(ConnectionStrings.ApplicationInsights)));
+                                             = config.GetConnectionString(nameof(ConnectionStrings.ApplicationInsights)));
+var logSwitch = new LoggingLevelSwitch(LogEventLevel.Warning);
 builder.Host.UseSerilog((_, svcs, lc) =>
                         {
                             lc
                                 .MinimumLevel.Information()
-                                .MinimumLevel.Override("Equinor.Maintenance.API.EventEnhancer.Middlewares.LogOriginHeader", LogEventLevel.Verbose)
                                 .MinimumLevel.Override("Microsoft.IdentityModel.LoggingExtensions.IdentityLoggerAdapter", LogEventLevel.Error)
                                 .Enrich.FromLogContext()
                                 .Enrich.With(svcs.GetRequiredService<HttpContextEnricher>())
-                                .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3} {SourceContext}] {Message:lj} by user {User}{NewLine}{Exception}")
-                                .WriteTo.ApplicationInsights(svcs.GetRequiredService<TelemetryConfiguration>(),
-                                                             TelemetryConverter.Traces, LogEventLevel.Information);
+                                .WriteTo
+                                .Console(outputTemplate:
+                                         "[{Timestamp:HH:mm:ss} {Level:u3} {SourceContext}] {Message:lj} by user {User}{NewLine}{Exception}");
+                            lc.WriteTo.ApplicationInsights(svcs.GetRequiredService<TelemetryConfiguration>(),
+                                                           TelemetryConverter.Traces,
+                                                           levelSwitch: logSwitch);
                         });
+services.AddSingleton(logSwitch);
 services.AddScoped<LogOriginHeader>();
 services.AddScoped<OriginCheck>();
 
-services.AddMicrosoftIdentityWebApiAuthentication(config, subscribeToJwtBearerMiddlewareDiagnosticsEvents: config.GetValue<bool>("SubscribeToDiagnosticEvents"))
+services.AddMicrosoftIdentityWebApiAuthentication(config,
+                                                  subscribeToJwtBearerMiddlewareDiagnosticsEvents:
+                                                  config.GetValue<bool>("SubscribeToDiagnosticEvents"))
         .EnableTokenAcquisitionToCallDownstreamApi()
         .AddDownstreamWebApi(Names.MainteanceApi,
                              opts =>
                              {
                                  opts.BaseUrl = config.GetConnectionString(nameof(ConnectionStrings.MaintenanceApi));
                                  opts.Scopes  = $"{config["MaintenanceApiClientId"]}/.default";
-                             }).AddInMemoryTokenCaches();
-
+                             })
+        .AddInMemoryTokenCaches();
 
 services.AddAuthorization(opts => opts.AddPolicy("PublishPolicy", policyBuilder => policyBuilder.RequireRole("Publish")));
 //new X509Certificate2(Convert.FromBase64String(config.GetValue<string>("AuthCertForMaintenanceApi")));
