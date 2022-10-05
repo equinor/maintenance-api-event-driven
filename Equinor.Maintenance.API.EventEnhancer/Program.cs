@@ -1,4 +1,5 @@
 using System.Net.Mime;
+using Azure.Extensions.AspNetCore.Configuration.Secrets;
 using Azure.Identity;
 using Equinor.Maintenance.API.EventEnhancer.ConfigSections;
 using Equinor.Maintenance.API.EventEnhancer.Constants;
@@ -19,7 +20,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 var services    = builder.Services;
 var config      = builder.Configuration;
-var environment = builder.Environment;
+//var environment = builder.Environment;
 
 // Add services to the container.
 services.AddOptions<AzureAd>()
@@ -38,7 +39,7 @@ Environment.SetEnvironmentVariable("AZURE_CLIENT_SECRET", azureAd.ClientSecret);
 var kvUrl = config.GetConnectionString(nameof(ConnectionStrings.KeyVault));
 config["AzureAd:ClientCertificates:0:KeyVaultUrl"] = kvUrl;
 
-config.AddAzureKeyVault(new Uri(kvUrl), new EnvironmentCredential());
+config.AddAzureKeyVault(new Uri(kvUrl), new EnvironmentCredential(), new AzureKeyVaultConfigurationOptions{ReloadInterval = TimeSpan.FromHours(0.5)});
 
 services.AddTransient<HttpContextEnricher>();
 services.AddHttpContextAccessor();
@@ -47,9 +48,12 @@ services.AddApplicationInsightsTelemetry(opts => opts.ConnectionString
 builder.Host.UseSerilog((_, svcs, lc) =>
                         {
                             lc
+                                .MinimumLevel.Information()
+                                .MinimumLevel.Override("Equinor.Maintenance.API.EventEnhancer.Middlewares.LogOriginHeader", LogEventLevel.Verbose)
+                                .MinimumLevel.Override("Microsoft.IdentityModel.LoggingExtensions.IdentityLoggerAdapter", LogEventLevel.Error)
                                 .Enrich.FromLogContext()
                                 .Enrich.With(svcs.GetRequiredService<HttpContextEnricher>())
-                                .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj} by user {User}{NewLine}{Exception}")
+                                .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3} {SourceContext}] {Message:lj} by user {User}{NewLine}{Exception}")
                                 .WriteTo.ApplicationInsights(svcs.GetRequiredService<TelemetryConfiguration>(),
                                                              TelemetryConverter.Traces,
                                                              restrictedToMinimumLevel: LogEventLevel.Warning);
@@ -57,7 +61,7 @@ builder.Host.UseSerilog((_, svcs, lc) =>
 services.AddScoped<LogOriginHeader>();
 services.AddScoped<OriginCheck>();
 
-services.AddMicrosoftIdentityWebApiAuthentication(config, subscribeToJwtBearerMiddlewareDiagnosticsEvents: environment.IsDevelopment())
+services.AddMicrosoftIdentityWebApiAuthentication(config, subscribeToJwtBearerMiddlewareDiagnosticsEvents: config.GetValue<bool>("SubscribeToDiagnosticEvents"))
         .EnableTokenAcquisitionToCallDownstreamApi()
         .AddDownstreamWebApi(Names.MainteanceApi,
                              opts =>
@@ -65,6 +69,8 @@ services.AddMicrosoftIdentityWebApiAuthentication(config, subscribeToJwtBearerMi
                                  opts.BaseUrl = config.GetConnectionString(nameof(ConnectionStrings.MaintenanceApi));
                                  opts.Scopes  = $"{config["MaintenanceApiClientId"]}/.default";
                              }).AddInMemoryTokenCaches();
+
+
 services.AddAuthorization(opts => opts.AddPolicy("PublishPolicy", policyBuilder => policyBuilder.RequireRole("Publish")));
 //new X509Certificate2(Convert.FromBase64String(config.GetValue<string>("AuthCertForMaintenanceApi")));
 services.AddAzureClients(clientBuilder => clientBuilder.AddServiceBusClient(config.GetConnectionString(nameof(ConnectionStrings.ServiceBus))));
