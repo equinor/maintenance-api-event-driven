@@ -54,7 +54,6 @@ builder.Host.UseSerilog((_, svcs, lc) =>
                                                              TelemetryConverter.Traces,
                                                              restrictedToMinimumLevel: LogEventLevel.Warning);
                         });
-
 services.AddScoped<LogOriginHeader>();
 services.AddScoped<OriginCheck>();
 
@@ -66,6 +65,7 @@ services.AddMicrosoftIdentityWebApiAuthentication(config, subscribeToJwtBearerMi
                                  opts.BaseUrl = config.GetConnectionString(nameof(ConnectionStrings.MaintenanceApi));
                                  opts.Scopes  = $"{config["MaintenanceApiClientId"]}/.default";
                              }).AddInMemoryTokenCaches();
+services.AddAuthorization(opts => opts.AddPolicy("PublishPolicy", policyBuilder => policyBuilder.RequireRole("Publish")));
 //new X509Certificate2(Convert.FromBase64String(config.GetValue<string>("AuthCertForMaintenanceApi")));
 services.AddAzureClients(clientBuilder => clientBuilder.AddServiceBusClient(config.GetConnectionString(nameof(ConnectionStrings.ServiceBus))));
 services.AddMediatR(typeof(Program));
@@ -87,7 +87,7 @@ app.MapPost(pattern,
             async ([FromBody] MaintenanceEventPublish body, IMediator mediator, CancellationToken cancelToken) =>
                 new CreatedResult(string.Empty, await mediator.Send(new PublishMaintenanceEventQuery(body), cancelToken)))
    .WithName("MaintenanceEventPublish")
-   .RequireAuthorization();
+   .RequireAuthorization("PublishPolicy");
 
 app.MapMethods(pattern,
                new[] { HttpMethod.Options.ToString() },
@@ -100,6 +100,6 @@ app.MapMethods(pattern,
                    return Task.CompletedTask;
                })
    .WithName("MaintenanceEventHandshake")
-   .RequireAuthorization();
+   .RequireAuthorization("PublishPolicy");
 
 app.Run();
