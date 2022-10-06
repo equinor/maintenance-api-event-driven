@@ -13,9 +13,11 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Azure;
 using Microsoft.Extensions.Primitives;
 using Microsoft.Identity.Web;
+using Microsoft.IdentityModel.JsonWebTokens;
 using Serilog;
 using Serilog.Core;
 using Serilog.Events;
+using Serilog.Sinks.SystemConsole.Themes;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -55,10 +57,9 @@ builder.Host.UseSerilog((_, svcs, lc) =>
                                 .MinimumLevel.ControlledBy(logSwitch)
                                 .MinimumLevel.Override("Microsoft.IdentityModel.LoggingExtensions.IdentityLoggerAdapter", LogEventLevel.Error)
                                 .Enrich.FromLogContext()
-                                .Enrich.With(svcs.GetRequiredService<HttpContextEnricher>())
+                                //.Enrich.With(svcs.GetRequiredService<HttpContextEnricher>())
                                 .WriteTo
-                                .Console(outputTemplate:
-                                         "[{Timestamp:HH:mm:ss} {Level:u3} {SourceContext}] {Message:lj} by caller {User}{NewLine}{Exception}");
+                                .Console(theme:AnsiConsoleTheme.Literate);
                             lc.WriteTo.ApplicationInsights(svcs.GetRequiredService<TelemetryConfiguration>(),
                                                            TelemetryConverter.Traces,
                                                            levelSwitch: logSwitch);
@@ -87,6 +88,16 @@ services.AddMediatR(typeof(Program));
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
+app.UseSerilogRequestLogging(opts =>
+                             {
+                                 opts.EnrichDiagnosticContext = (context, httpContext) =>
+                                                                {
+                                                                    var id = httpContext.User.Identity?.Name ??
+                                                                               httpContext.User.FindFirst(JwtRegisteredClaimNames.Azp)?.Value;
+                                                                    if (id is { }) context.Set("Identity", $" by caller {id}");
+                                                                };
+                                 opts.MessageTemplate = "HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000} ms {Identity}";
+                             });
 app.UseMiddleware<LogOriginHeader>();
 app.UseHttpsRedirection();
 
