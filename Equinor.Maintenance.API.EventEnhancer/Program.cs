@@ -58,7 +58,7 @@ builder.Host.UseSerilog((_, svcs, lc) =>
                                 .Enrich.With(svcs.GetRequiredService<HttpContextEnricher>())
                                 .WriteTo
                                 .Console(outputTemplate:
-                                         "[{Timestamp:HH:mm:ss} {Level:u3} {SourceContext}] {Message:lj} by user {User}{NewLine}{Exception}");
+                                         "[{Timestamp:HH:mm:ss} {Level:u3} {SourceContext}] {Message:lj} by caller {User}{NewLine}{Exception}");
                             lc.WriteTo.ApplicationInsights(svcs.GetRequiredService<TelemetryConfiguration>(),
                                                            TelemetryConverter.Traces,
                                                            levelSwitch: logSwitch);

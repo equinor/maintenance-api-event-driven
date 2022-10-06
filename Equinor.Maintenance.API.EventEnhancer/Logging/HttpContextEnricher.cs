@@ -1,3 +1,4 @@
+using Microsoft.IdentityModel.JsonWebTokens;
 using Serilog.Core;
 using Serilog.Events;
 
@@ -16,7 +17,7 @@ public class HttpContextEnricher : ILogEventEnricher
             return;
         }
 
-        var user = _accessor.HttpContext.User.FindFirst("name") ?? _accessor.HttpContext.User.FindFirst("appid");
+        var user = _accessor.HttpContext.User.FindFirst("name") ?? _accessor.HttpContext.User.FindFirst(JwtRegisteredClaimNames.Azp);
         if (user is { }) logEvent.AddOrUpdateProperty(propertyFactory.CreateProperty("User", user.Value));
     }
 }

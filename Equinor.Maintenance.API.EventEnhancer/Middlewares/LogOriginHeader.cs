@@ -39,7 +39,7 @@ public class LogOriginHeader : IMiddleware
             else
                 _logger.LogWarning("Could not find header: {HeaderName}", Names.WebHookRequestHeader);
 
-            var iteration = 0;
+            var iteration = 1;
             foreach (var header in context.Request.Headers)
             {
                 _logger.LogTrace("Reqeust Header #{Iteration}: {Key}-{Header}",iteration++, header.Key, header.Value.FirstOrDefault());
