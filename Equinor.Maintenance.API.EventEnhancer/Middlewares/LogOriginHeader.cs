@@ -25,6 +25,7 @@ public class LogOriginHeader : IMiddleware
         }
         finally
         {
+            var tempLevel = _logSwitch.MinimumLevel;
             _logSwitch.MinimumLevel = LogEventLevel.Verbose;
             request.Body.Position   = 0;
             var buffer = new byte[Convert.ToInt32(request.ContentLength)];
@@ -37,7 +38,14 @@ public class LogOriginHeader : IMiddleware
                 _logger.LogTrace("Header {HeaderName}: {WebHookOrigin}", Names.WebHookRequestHeader,webHookOrigin);
             else
                 _logger.LogWarning("Could not find header: {HeaderName}", Names.WebHookRequestHeader);
-            _logSwitch.MinimumLevel = LogEventLevel.Warning;
+
+            var iteration = 0;
+            foreach (var header in context.Request.Headers)
+            {
+                _logger.LogTrace("Reqeust Header #{Iteration}: {Key}-{Header}",iteration++, header.Key, header.Value.FirstOrDefault());
+            }
+
+            _logSwitch.MinimumLevel = tempLevel;
         }
     }
 }

@@ -48,11 +48,11 @@ services.AddTransient<HttpContextEnricher>();
 services.AddHttpContextAccessor();
 services.AddApplicationInsightsTelemetry(opts => opts.ConnectionString
                                              = config.GetConnectionString(nameof(ConnectionStrings.ApplicationInsights)));
-var logSwitch = new LoggingLevelSwitch(LogEventLevel.Warning);
+var logSwitch = new LoggingLevelSwitch();
 builder.Host.UseSerilog((_, svcs, lc) =>
                         {
                             lc
-                                .MinimumLevel.Information()
+                                .MinimumLevel.ControlledBy(logSwitch)
                                 .MinimumLevel.Override("Microsoft.IdentityModel.LoggingExtensions.IdentityLoggerAdapter", LogEventLevel.Error)
                                 .Enrich.FromLogContext()
                                 .Enrich.With(svcs.GetRequiredService<HttpContextEnricher>())
