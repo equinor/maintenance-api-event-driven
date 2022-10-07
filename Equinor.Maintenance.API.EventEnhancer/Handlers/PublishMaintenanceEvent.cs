@@ -11,7 +11,9 @@ using Microsoft.Identity.Web;
 
 namespace Equinor.Maintenance.API.EventEnhancer.Handlers;
 
-public class PublishMaintenanceEventQuery : IRequest<MaintenanceEventHook>
+public record PublishMaintenanceEventResult(MaintenanceEventHook? Data, bool Success);
+
+public class PublishMaintenanceEventQuery : IRequest<PublishMaintenanceEventResult>
 {
     public MaintenanceEventPublish MaintenanceEventPublish { get; }
 
@@ -19,29 +21,31 @@ public class PublishMaintenanceEventQuery : IRequest<MaintenanceEventHook>
 }
 
 [UsedImplicitly]
-public class PublishMaintenanceEvent : IRequestHandler<PublishMaintenanceEventQuery, MaintenanceEventHook>
+public class PublishMaintenanceEvent : IRequestHandler<PublishMaintenanceEventQuery, PublishMaintenanceEventResult>
 {
     private readonly ServiceBusClient _serviceBus;
     private readonly IDownstreamWebApi _dsApi;
+    private readonly ILogger<PublishMaintenanceEvent> _logger;
 
-    public PublishMaintenanceEvent(ServiceBusClient serviceBus, IDownstreamWebApi dsApi)
+    public PublishMaintenanceEvent(ServiceBusClient serviceBus, IDownstreamWebApi dsApi, ILogger<PublishMaintenanceEvent> logger)
     {
         _serviceBus = serviceBus;
         _dsApi      = dsApi;
+        _logger     = logger;
     }
 
-    public async Task<MaintenanceEventHook> Handle(PublishMaintenanceEventQuery query, CancellationToken cancellationToken)
+    public async Task<PublishMaintenanceEventResult> Handle(PublishMaintenanceEventQuery query, CancellationToken cancellationToken)
     {
         var    data     = query.MaintenanceEventPublish.Data;
         var    objectId = data.ObjectId.TrimStart('0');
         string request;
         var    sourcePart = "https://equinor.github.io/maintenance-api-event-driven-docs/#tag/{0}";
         var    type       = "com.equinor.maintenance-events.{0}";
-        
+
         switch (data)
         {
             case (_, "BUS2007", var @event):
-                request = WorkorderRequestBuilder.BuildCorrectiveLookup(objectId); 
+                request = WorkorderRequestBuilder.BuildCorrectiveLookup(objectId);
                 CheckEventAndSetProps(@event, "corrective-work-order");
 
                 break;
@@ -54,6 +58,7 @@ public class PublishMaintenanceEvent : IRequestHandler<PublishMaintenanceEventQu
             default:
                 throw new ArgumentOutOfRangeException(nameof(data));
         }
+
         void CheckEventAndSetProps(string @event, string input)
         {
             switch (@event)
@@ -71,10 +76,20 @@ public class PublishMaintenanceEvent : IRequestHandler<PublishMaintenanceEventQu
 
                     break;
             }
-
         }
 
         var result = await _dsApi.CallWebApiForAppAsync(Names.MainteanceApi, opts => opts.RelativePath = request);
+        if (!result.IsSuccessStatusCode)
+        {
+            _logger.LogError("Failed to get data from Maintenance API{Newline}Response Code: {@Code}{NewLine}{ResponseContent}",
+                             Environment.NewLine,
+                             result.StatusCode,
+                             Environment.NewLine,
+                             await result.Content.ReadAsStringAsync(cancellationToken));
+
+            return new PublishMaintenanceEventResult(null, false);
+        }
+
         var messageToHook = new MaintenanceEventHook("1.0",
                                                      type,
                                                      query.MaintenanceEventPublish.Id,
@@ -87,7 +102,7 @@ public class PublishMaintenanceEvent : IRequestHandler<PublishMaintenanceEventQu
         await sender.SendMessageAsync(maintenanceEvent, cancellationToken);
         await sender.CloseAsync(cancellationToken);
 
-        return messageToHook;
+        return new PublishMaintenanceEventResult(messageToHook, true);
     }
 
     private void SetMetaData(ref string typeInput, ref string sourceInput, string input)
