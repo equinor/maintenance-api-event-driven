@@ -110,7 +110,11 @@ const string pattern = "/maintenance-events";
 
 app.MapPost(pattern,
             async ([FromBody] MaintenanceEventPublish body, IMediator mediator, CancellationToken cancelToken) =>
-                new CreatedResult(string.Empty, await mediator.Send(new PublishMaintenanceEventQuery(body), cancelToken)))
+            {
+                var result = await mediator.Send(new PublishMaintenanceEventQuery(body), cancelToken);
+                
+                return result.Success ?  Results.Created(string.Empty, result.Data) : Results.StatusCode(StatusCodes.Status418ImATeapot);
+            })
    .WithName("MaintenanceEventPublish")
    .RequireAuthorization("PublishPolicy");
 
