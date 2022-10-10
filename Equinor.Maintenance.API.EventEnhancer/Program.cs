@@ -4,7 +4,6 @@ using Azure.Identity;
 using Equinor.Maintenance.API.EventEnhancer.ConfigSections;
 using Equinor.Maintenance.API.EventEnhancer.Constants;
 using Equinor.Maintenance.API.EventEnhancer.Handlers;
-using Equinor.Maintenance.API.EventEnhancer.Logging;
 using Equinor.Maintenance.API.EventEnhancer.Middlewares;
 using Equinor.Maintenance.API.EventEnhancer.Models;
 using MediatR;
@@ -46,21 +45,18 @@ config.AddAzureKeyVault(new Uri(kvUrl),
                         new EnvironmentCredential(),
                         new AzureKeyVaultConfigurationOptions { ReloadInterval = TimeSpan.FromHours(0.5) });
 
-services.AddTransient<HttpContextEnricher>();
 services.AddHttpContextAccessor();
 services.AddApplicationInsightsTelemetry(opts => opts.ConnectionString
                                              = config.GetConnectionString(nameof(ConnectionStrings.ApplicationInsights)));
 var logSwitch = new LoggingLevelSwitch();
 builder.Host.UseSerilog((_, svcs, lc) =>
                         {
-                            lc
-                                .MinimumLevel.ControlledBy(logSwitch)
-                                .MinimumLevel.Override("Microsoft.IdentityModel.LoggingExtensions.IdentityLoggerAdapter", LogEventLevel.Error)
-                                .Enrich.FromLogContext()
-                                //.Enrich.With(svcs.GetRequiredService<HttpContextEnricher>())
-                                .WriteTo
-                                .Console(theme:AnsiConsoleTheme.Literate);
-                            lc.WriteTo.ApplicationInsights(svcs.GetRequiredService<TelemetryConfiguration>(),
+                            lc.MinimumLevel.ControlledBy(logSwitch)
+                              .MinimumLevel.Override("Microsoft.IdentityModel.LoggingExtensions.IdentityLoggerAdapter", LogEventLevel.Error)
+                              .Enrich.FromLogContext()
+                              .WriteTo
+                              .Console(theme: AnsiConsoleTheme.Literate)
+                              .WriteTo.ApplicationInsights(svcs.GetRequiredService<TelemetryConfiguration>(),
                                                            TelemetryConverter.Traces,
                                                            levelSwitch: logSwitch);
                         });
@@ -80,8 +76,14 @@ services.AddMicrosoftIdentityWebApiAuthentication(config,
                              })
         .AddInMemoryTokenCaches();
 
-services.AddAuthorization(opts => opts.AddPolicy("PublishPolicy", policyBuilder => policyBuilder.RequireRole("Publish")));
-//new X509Certificate2(Convert.FromBase64String(config.GetValue<string>("AuthCertForMaintenanceApi")));
+services.AddAuthorization(opts => opts.AddPolicy("PublishPolicy", policyBuilder =>
+                                                                  {
+                                                                      policyBuilder.RequireRole("Publish");
+                                                                      policyBuilder.RequireClaim(JwtRegisteredClaimNames.Azp, 
+                                                                                                 config.GetSection("AllowedClients")
+                                                                                                     .AsEnumerable().Select(pair => pair.Value));
+                                                                  }));
+
 services.AddAzureClients(clientBuilder => clientBuilder.AddServiceBusClient(config.GetConnectionString(nameof(ConnectionStrings.ServiceBus))));
 services.AddMediatR(typeof(Program));
 
@@ -93,7 +95,7 @@ app.UseSerilogRequestLogging(opts =>
                                  opts.EnrichDiagnosticContext = (context, httpContext) =>
                                                                 {
                                                                     var id = httpContext.User.Identity?.Name ??
-                                                                               httpContext.User.FindFirst(JwtRegisteredClaimNames.Azp)?.Value;
+                                                                             httpContext.User.FindFirst(JwtRegisteredClaimNames.Azp)?.Value;
                                                                     if (id is { }) context.Set("Identity", $" by caller {id}");
                                                                 };
                                  opts.MessageTemplate = "HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000} ms {Identity}";
