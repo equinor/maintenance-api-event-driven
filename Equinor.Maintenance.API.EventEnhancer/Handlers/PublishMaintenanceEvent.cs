@@ -3,7 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Azure.Messaging.ServiceBus;
 using Equinor.Maintenance.API.EventEnhancer.Constants;
-using Equinor.Maintenance.API.EventEnhancer.MaintenanceRequests;
+using Equinor.Maintenance.API.EventEnhancer.MaintenanceApiClient.Requests;
 using Equinor.Maintenance.API.EventEnhancer.Models;
 using JetBrains.Annotations;
 using MediatR;
@@ -45,12 +45,12 @@ public class PublishMaintenanceEvent : IRequestHandler<PublishMaintenanceEventQu
         switch (data)
         {
             case (_, "BUS2007", var @event):
-                request = WorkorderRequestBuilder.BuildCorrectiveLookup(objectId);
+                request = WorkorderBuilder.BuildCorrectiveLookup(objectId);
                 CheckEventAndSetProps(@event, "corrective-work-order");
 
                 break;
             case (_, "BUS2078", var @event):
-                request = MaintenanceRecordsRequestBuilder.BuildActivityReportLookup(objectId);
+                request = MaintenanceRecordsBuilder.BuildFailureReportLookup(objectId);
                 CheckEventAndSetProps(@event, "activity-report");
 
                 break;
