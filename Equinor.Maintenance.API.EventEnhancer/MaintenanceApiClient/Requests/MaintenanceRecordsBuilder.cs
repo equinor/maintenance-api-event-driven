@@ -1,8 +1,8 @@
 using Microsoft.AspNetCore.WebUtilities;
 
-namespace Equinor.Maintenance.API.EventEnhancer.MaintenanceRequests;
+namespace Equinor.Maintenance.API.EventEnhancer.MaintenanceApiClient.Requests;
 
-public class MaintenanceRecordsRequestBuilder
+public class MaintenanceRecordsBuilder
 {
     private const string Uri = "maintenance-records/{0}/{1}";
     private static readonly Dictionary<string, string?> CommonQueryParams = new()

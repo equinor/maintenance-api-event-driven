@@ -40,6 +40,7 @@
     <Folder Include="..\.github\.idea\.idea..github.dir\.idea">
       <Link>.github\.idea\.idea..github.dir\.idea</Link>
     </Folder>
+    <Folder Include="MaintenanceApiClient" />
   </ItemGroup>
 
 </Project>

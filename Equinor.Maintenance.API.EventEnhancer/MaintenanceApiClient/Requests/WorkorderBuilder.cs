@@ -1,8 +1,8 @@
 using Microsoft.AspNetCore.WebUtilities;
 
-namespace Equinor.Maintenance.API.EventEnhancer.MaintenanceRequests;
+namespace Equinor.Maintenance.API.EventEnhancer.MaintenanceApiClient.Requests;
 
-public class WorkorderRequestBuilder
+public class WorkorderBuilder
 {
     private const string Uri = "work-orders/{0}/{1}";
     private static readonly Dictionary<string, string?> CommonQueryParams = new()

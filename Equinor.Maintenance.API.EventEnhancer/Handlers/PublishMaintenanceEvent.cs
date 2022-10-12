@@ -3,7 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Azure.Messaging.ServiceBus;
 using Equinor.Maintenance.API.EventEnhancer.Constants;
-using Equinor.Maintenance.API.EventEnhancer.MaintenanceRequests;
+using Equinor.Maintenance.API.EventEnhancer.MaintenanceApiClient.Requests;
 using Equinor.Maintenance.API.EventEnhancer.Models;
 using JetBrains.Annotations;
 using MediatR;
@@ -11,7 +11,7 @@ using Microsoft.Identity.Web;
 
 namespace Equinor.Maintenance.API.EventEnhancer.Handlers;
 
-public record PublishMaintenanceEventResult(MaintenanceEventHook? Data, bool Success);
+public record PublishMaintenanceEventResult(MaintenanceEventHook? Data, int StatusCode);
 
 public class PublishMaintenanceEventQuery : IRequest<PublishMaintenanceEventResult>
 {
@@ -45,12 +45,12 @@ public class PublishMaintenanceEvent : IRequestHandler<PublishMaintenanceEventQu
         switch (data)
         {
             case (_, "BUS2007", var @event):
-                request = WorkorderRequestBuilder.BuildCorrectiveLookup(objectId);
+                request = WorkorderBuilder.BuildCorrectiveLookup(objectId);
                 CheckEventAndSetProps(@event, "corrective-work-order");
 
                 break;
             case (_, "BUS2078", var @event):
-                request = MaintenanceRecordsRequestBuilder.BuildActivityReportLookup(objectId);
+                request = MaintenanceRecordsBuilder.BuildFailureReportLookup(objectId);
                 CheckEventAndSetProps(@event, "activity-report");
 
                 break;
@@ -87,7 +87,7 @@ public class PublishMaintenanceEvent : IRequestHandler<PublishMaintenanceEventQu
                              Environment.NewLine,
                              await result.Content.ReadAsStringAsync(cancellationToken));
 
-            return new PublishMaintenanceEventResult(null, false);
+            return new PublishMaintenanceEventResult(null, (int)result.StatusCode);
         }
 
         var messageToHook = new MaintenanceEventHook("1.0",
@@ -102,7 +102,7 @@ public class PublishMaintenanceEvent : IRequestHandler<PublishMaintenanceEventQu
         await sender.SendMessageAsync(maintenanceEvent, cancellationToken);
         await sender.CloseAsync(cancellationToken);
 
-        return new PublishMaintenanceEventResult(messageToHook, true);
+        return new PublishMaintenanceEventResult(messageToHook, (int)result.StatusCode);
     }
 
     private void SetMetaData(ref string typeInput, ref string sourceInput, string input)

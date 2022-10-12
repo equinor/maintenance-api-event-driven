@@ -115,7 +115,7 @@ app.MapPost(pattern,
             {
                 var result = await mediator.Send(new PublishMaintenanceEventQuery(body), cancelToken);
                 
-                return result.Success ?  Results.Created(string.Empty, result.Data) : Results.StatusCode(StatusCodes.Status418ImATeapot);
+                return result.StatusCode < 399 ?  Results.Created(string.Empty, result.Data) : Results.StatusCode(result.StatusCode);
             })
    .WithName("MaintenanceEventPublish")
    .RequireAuthorization("PublishPolicy");
