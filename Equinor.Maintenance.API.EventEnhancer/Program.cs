@@ -2,7 +2,6 @@ using System.Net.Mime;
 using Azure.Extensions.AspNetCore.Configuration.Secrets;
 using Azure.Identity;
 using Equinor.Maintenance.API.EventEnhancer.ConfigSections;
-using Equinor.Maintenance.API.EventEnhancer.Constants;
 using Equinor.Maintenance.API.EventEnhancer.Handlers;
 using Equinor.Maintenance.API.EventEnhancer.Middlewares;
 using Equinor.Maintenance.API.EventEnhancer.Models;
@@ -68,21 +67,35 @@ services.AddMicrosoftIdentityWebApiAuthentication(config,
                                                   subscribeToJwtBearerMiddlewareDiagnosticsEvents:
                                                   config.GetValue<bool>("SubscribeToDiagnosticEvents"))
         .EnableTokenAcquisitionToCallDownstreamApi()
-        .AddDownstreamWebApi(Names.MainteanceApi,
-                             opts =>
-                             {
-                                 opts.BaseUrl = config.GetConnectionString(nameof(ConnectionStrings.MaintenanceApi));
-                                 opts.Scopes  = $"{config["MaintenanceApiClientId"]}/.default";
-                             })
+        // .AddDownstreamWebApi(Names.MainteanceApi,
+        //                      opts =>
+        //                      {
+        //                          opts.BaseUrl = config.GetConnectionString(nameof(ConnectionStrings.MaintenanceApi));
+        //                          opts.Scopes  = $"{config["MaintenanceApiClientId"]}/.default";
+        //                      })
         .AddInMemoryTokenCaches();
 
-services.AddAuthorization(opts => opts.AddPolicy("PublishPolicy", policyBuilder =>
-                                                                  {
-                                                                      policyBuilder.RequireRole("Publish");
-                                                                      policyBuilder.RequireClaim(JwtRegisteredClaimNames.Azp, 
-                                                                                                 config.GetSection("AllowedClients")
-                                                                                                     .AsEnumerable().Select(pair => pair.Value));
-                                                                  }));
+services.AddHttpClient("MaintenanceApi",
+                       cli =>
+                           cli.BaseAddress = new Uri(config.GetConnectionString(nameof(ConnectionStrings.MaintenanceApi)))
+                      )
+        .ConfigurePrimaryHttpMessageHandler(() =>
+                                            {
+                                                var handler = new HttpClientHandler();
+                                                handler.AllowAutoRedirect = false;
+
+                                                return handler;
+                                            });
+
+services.AddAuthorization(opts => opts.AddPolicy("PublishPolicy",
+                                                 policyBuilder =>
+                                                 {
+                                                     policyBuilder.RequireRole("Publish");
+                                                     policyBuilder.RequireClaim(JwtRegisteredClaimNames.Azp,
+                                                                                config.GetSection("AllowedClients")
+                                                                                      .AsEnumerable()
+                                                                                      .Select(pair => pair.Value));
+                                                 }));
 
 services.AddAzureClients(clientBuilder => clientBuilder.AddServiceBusClient(config.GetConnectionString(nameof(ConnectionStrings.ServiceBus))));
 services.AddMediatR(typeof(Program));
@@ -114,8 +127,8 @@ app.MapPost(pattern,
             async ([FromBody] MaintenanceEventPublish body, IMediator mediator, CancellationToken cancelToken) =>
             {
                 var result = await mediator.Send(new PublishMaintenanceEventQuery(body), cancelToken);
-                
-                return result.StatusCode < 399 ?  Results.Created(string.Empty, result.Data) : Results.StatusCode(result.StatusCode);
+
+                return result.StatusCode < 399 ? Results.Created(string.Empty, result.Data) : Results.StatusCode(result.StatusCode);
             })
    .WithName("MaintenanceEventPublish")
    .RequireAuthorization("PublishPolicy");
