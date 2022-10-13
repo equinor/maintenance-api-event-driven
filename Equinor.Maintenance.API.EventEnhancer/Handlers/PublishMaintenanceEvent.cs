@@ -34,9 +34,6 @@ public class PublishMaintenanceEvent : IRequestHandler<PublishMaintenanceEventQu
 
     public PublishMaintenanceEvent(
         ServiceBusClient serviceBus,
-
-        
-        
         ITokenAcquisition tokenAcquisition,
         IConfiguration config,
         IHttpClientFactory factory,

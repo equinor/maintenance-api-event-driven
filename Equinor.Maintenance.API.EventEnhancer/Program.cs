@@ -54,9 +54,11 @@ builder.Host.UseSerilog((_, svcs, lc) =>
                         {
                             lc.MinimumLevel.ControlledBy(logSwitch)
                               .MinimumLevel.Override("Microsoft.IdentityModel.LoggingExtensions.IdentityLoggerAdapter", LogEventLevel.Error)
+                              .MinimumLevel.Override("Microsoft.Identity.Web.TokenAcquisition", LogEventLevel.Warning)
+                              .MinimumLevel.Override("Azure.Core", LogEventLevel.Warning)
+                              .MinimumLevel.Override("Azure.Identity", LogEventLevel.Warning)
                               .Enrich.FromLogContext()
-                              .WriteTo
-                              .Console(theme: AnsiConsoleTheme.Literate)
+                              .WriteTo.Console(theme: AnsiConsoleTheme.Literate, outputTemplate:"[{Timestamp:HH:mm:ss} {Level:u3} {SourceContext:l}] {Message:lj}{NewLine}{Exception}")
                               .WriteTo.ApplicationInsights(svcs.GetRequiredService<TelemetryConfiguration>(),
                                                            TelemetryConverter.Traces,
                                                            levelSwitch: logSwitch);
