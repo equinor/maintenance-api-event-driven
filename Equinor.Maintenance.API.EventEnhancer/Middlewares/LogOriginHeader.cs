@@ -42,7 +42,7 @@ public class LogOriginHeader : IMiddleware
             var iteration = 1;
             foreach (var header in context.Request.Headers)
             {
-                _logger.LogTrace("Reqeust Header #{Iteration}: {Key}-{Header}",iteration++, header.Key, header.Value.FirstOrDefault());
+                _logger.LogTrace("Request Header #{Iteration}: {Key}:{Header}",iteration++, header.Key, header.Value.FirstOrDefault());
             }
 
             _logSwitch.MinimumLevel = tempLevel;
