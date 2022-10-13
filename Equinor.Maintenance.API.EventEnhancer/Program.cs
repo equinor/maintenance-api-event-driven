@@ -2,11 +2,13 @@ using System.Net.Mime;
 using Azure.Extensions.AspNetCore.Configuration.Secrets;
 using Azure.Identity;
 using Equinor.Maintenance.API.EventEnhancer.ConfigSections;
+using Equinor.Maintenance.API.EventEnhancer.Constants;
 using Equinor.Maintenance.API.EventEnhancer.Handlers;
 using Equinor.Maintenance.API.EventEnhancer.Middlewares;
 using Equinor.Maintenance.API.EventEnhancer.Models;
 using MediatR;
 using Microsoft.ApplicationInsights.Extensibility;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Azure;
 using Microsoft.Extensions.Primitives;
@@ -41,7 +43,7 @@ var kvUrl = config.GetConnectionString(nameof(ConnectionStrings.KeyVault));
 config["AzureAd:ClientCertificates:0:KeyVaultUrl"] = kvUrl;
 
 config.AddAzureKeyVault(new Uri(kvUrl),
-                        new EnvironmentCredential(),
+                        new ClientSecretCredential(azureAd.TenantId, azureAd.ClientId, azureAd.ClientSecret),
                         new AzureKeyVaultConfigurationOptions { ReloadInterval = TimeSpan.FromHours(0.5) });
 
 services.AddHttpContextAccessor();
@@ -61,41 +63,36 @@ builder.Host.UseSerilog((_, svcs, lc) =>
                         });
 services.AddSingleton(logSwitch);
 services.AddScoped<LogOriginHeader>();
-services.AddScoped<OriginCheck>();
+services.AddScoped<IAuthorizationHandler, WebHookOriginHandler>();
+//services.AddScoped<OriginCheck>();
 
 services.AddMicrosoftIdentityWebApiAuthentication(config,
                                                   subscribeToJwtBearerMiddlewareDiagnosticsEvents:
                                                   config.GetValue<bool>("SubscribeToDiagnosticEvents"))
         .EnableTokenAcquisitionToCallDownstreamApi()
-        // .AddDownstreamWebApi(Names.MainteanceApi,
-        //                      opts =>
-        //                      {
-        //                          opts.BaseUrl = config.GetConnectionString(nameof(ConnectionStrings.MaintenanceApi));
-        //                          opts.Scopes  = $"{config["MaintenanceApiClientId"]}/.default";
-        //                      })
         .AddInMemoryTokenCaches();
 
-services.AddHttpClient("MaintenanceApi",
-                       cli =>
-                           cli.BaseAddress = new Uri(config.GetConnectionString(nameof(ConnectionStrings.MaintenanceApi)))
-                      )
-        .ConfigurePrimaryHttpMessageHandler(() =>
-                                            {
-                                                var handler = new HttpClientHandler();
-                                                handler.AllowAutoRedirect = false;
+services.AddHttpClient(Names.MainteanceApi,
+                       cli => cli.BaseAddress = new Uri(config.GetConnectionString(nameof(ConnectionStrings.MaintenanceApi))))
+        .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 
-                                                return handler;
-                                            });
-
-services.AddAuthorization(opts => opts.AddPolicy("PublishPolicy",
-                                                 policyBuilder =>
-                                                 {
-                                                     policyBuilder.RequireRole("Publish");
-                                                     policyBuilder.RequireClaim(JwtRegisteredClaimNames.Azp,
-                                                                                config.GetSection("AllowedClients")
-                                                                                      .AsEnumerable()
-                                                                                      .Select(pair => pair.Value));
-                                                 }));
+services.AddAuthorization(opts =>
+                          {
+                              opts.AddPolicy(Policy.Publish,
+                                             policyBuilder =>
+                                             {
+                                                 policyBuilder.RequireRole(Role.Publish);
+                                                 policyBuilder.RequireClaim(JwtRegisteredClaimNames.Azp,
+                                                                            config.GetSection("AllowedClients")
+                                                                                  .AsEnumerable()
+                                                                                  .Select(pair => pair.Value));
+                                             });
+                              opts.AddPolicy(Policy.WebHookOrigin,
+                                             policyBuilder =>
+                                             {
+                                                 policyBuilder.AddRequirements(new WebHookOriginRequirement(azureAd.AllowedWebHookOrigins));
+                                             });
+                          });
 
 services.AddAzureClients(clientBuilder => clientBuilder.AddServiceBusClient(config.GetConnectionString(nameof(ConnectionStrings.ServiceBus))));
 services.AddMediatR(typeof(Program));
@@ -119,7 +116,7 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.UseMiddleware<OriginCheck>();
+//app.UseMiddleware<OriginCheck>();
 
 const string pattern = "/maintenance-events";
 
@@ -131,7 +128,7 @@ app.MapPost(pattern,
                 return result.StatusCode < 399 ? Results.Created(string.Empty, result.Data) : Results.StatusCode(result.StatusCode);
             })
    .WithName("MaintenanceEventPublish")
-   .RequireAuthorization("PublishPolicy");
+   .RequireAuthorization(Policy.Publish);
 
 app.MapMethods(pattern,
                new[] { HttpMethod.Options.ToString() },
@@ -144,6 +141,6 @@ app.MapMethods(pattern,
                    return Task.CompletedTask;
                })
    .WithName("MaintenanceEventHandshake")
-   .RequireAuthorization("PublishPolicy");
+   .RequireAuthorization(Policy.Publish, Policy.WebHookOrigin);
 
 app.Run();

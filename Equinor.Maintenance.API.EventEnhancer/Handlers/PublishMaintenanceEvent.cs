@@ -8,6 +8,7 @@ using Equinor.Maintenance.API.EventEnhancer.MaintenanceApiClient.Requests;
 using Equinor.Maintenance.API.EventEnhancer.Models;
 using JetBrains.Annotations;
 using MediatR;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Identity.Web;
 using Microsoft.Net.Http.Headers;
 
@@ -26,7 +27,6 @@ public class PublishMaintenanceEventQuery : IRequest<PublishMaintenanceEventResu
 public class PublishMaintenanceEvent : IRequestHandler<PublishMaintenanceEventQuery, PublishMaintenanceEventResult>
 {
     private readonly ServiceBusClient _serviceBus;
-    //private readonly IDownstreamWebApi _dsApi;
     private readonly ITokenAcquisition _tokenAcquisition;
     private readonly IConfiguration _config;
     private readonly HttpClient _client;
@@ -34,17 +34,18 @@ public class PublishMaintenanceEvent : IRequestHandler<PublishMaintenanceEventQu
 
     public PublishMaintenanceEvent(
         ServiceBusClient serviceBus,
-        // IDownstreamWebApi dsApi,
+
+        
+        
         ITokenAcquisition tokenAcquisition,
         IConfiguration config,
         IHttpClientFactory factory,
         ILogger<PublishMaintenanceEvent> logger)
     {
-        _serviceBus = serviceBus;
-        // _dsApi            = dsApi;
+        _serviceBus       = serviceBus;
         _tokenAcquisition = tokenAcquisition;
         _config           = config;
-        _client           = factory.CreateClient("MaintenanceApi");
+        _client           = factory.CreateClient(Names.MainteanceApi);
         _logger           = logger;
     }
 
@@ -61,15 +62,14 @@ public class PublishMaintenanceEvent : IRequestHandler<PublishMaintenanceEventQu
                           _                 => throw new ArgumentOutOfRangeException(nameof(data))
                       };
 
-        var tokenHeader = new AuthenticationHeaderValue("Bearer", await tokenAwaitable);
+        var tokenHeader = new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, await tokenAwaitable);
         var requestMessage = new HttpRequestMessage
                              {
                                  RequestUri = new Uri(request, UriKind.Relative),
                                  Headers    = { { HeaderNames.Authorization, tokenHeader.ToString() } }
                              };
         var result = await _client.SendAsync(requestMessage, cancellationToken);
-
-        // var result = await _dsApi.CallWebApiForAppAsync(Names.MainteanceApi, opts => { opts.RelativePath = request; });
+        
 
         var processedResult = await HandleResult(query, cancellationToken, result, data.Event, objectId);
         if (processedResult.Data is null && processedResult.StatusCode == StatusCodes.Status301MovedPermanently)
