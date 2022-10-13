@@ -66,7 +66,6 @@ builder.Host.UseSerilog((_, svcs, lc) =>
 services.AddSingleton(logSwitch);
 services.AddScoped<LogOriginHeader>();
 services.AddScoped<IAuthorizationHandler, WebHookOriginHandler>();
-//services.AddScoped<OriginCheck>();
 
 services.AddMicrosoftIdentityWebApiAuthentication(config,
                                                   subscribeToJwtBearerMiddlewareDiagnosticsEvents:
@@ -117,8 +116,6 @@ app.UseHttpsRedirection();
 
 app.UseAuthentication();
 app.UseAuthorization();
-
-//app.UseMiddleware<OriginCheck>();
 
 const string pattern = "/maintenance-events";
 
