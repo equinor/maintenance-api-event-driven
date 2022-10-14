@@ -102,7 +102,8 @@ public class PublishMaintenanceEvent : IRequestHandler<PublishMaintenanceEventQu
             return new PublishMaintenanceEventResult(null, (int)result.StatusCode);
         }
 
-        var (type, sourcePart) = CheckEventAndSetProps(@event, "activity-report"); //fix this
+            
+        var (type, sourcePart) = CheckEventAndSetProps(@event, result.RequestMessage?.RequestUri?.Segments[3].TrimEnd('/') ?? ""); 
         var messageToHook = new MaintenanceEventHook("1.0",
                                                      type,
                                                      query.MaintenanceEventPublish.Id,
