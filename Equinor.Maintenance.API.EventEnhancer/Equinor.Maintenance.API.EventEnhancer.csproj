@@ -17,6 +17,7 @@
     <PackageReference Include="Microsoft.ApplicationInsights.AspNetCore" Version="2.21.0" />
     <PackageReference Include="Microsoft.Extensions.Azure" Version="1.4.0" />
     <PackageReference Include="Microsoft.Identity.Web" Version="1.25.1" />
+    <PackageReference Include="RestSharp" Version="108.0.2" />
     <PackageReference Include="Serilog.AspNetCore" Version="6.0.1" />
     <PackageReference Include="Serilog.Sinks.ApplicationInsights" Version="4.0.0" />
   </ItemGroup>
@@ -40,7 +41,6 @@
     <Folder Include="..\.github\.idea\.idea..github.dir\.idea">
       <Link>.github\.idea\.idea..github.dir\.idea</Link>
     </Folder>
-    <Folder Include="MaintenanceApiClient" />
   </ItemGroup>
 
 </Project>

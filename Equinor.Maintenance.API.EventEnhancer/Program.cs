@@ -4,6 +4,7 @@ using Azure.Identity;
 using Equinor.Maintenance.API.EventEnhancer.ConfigSections;
 using Equinor.Maintenance.API.EventEnhancer.Constants;
 using Equinor.Maintenance.API.EventEnhancer.Handlers;
+using Equinor.Maintenance.API.EventEnhancer.MaintenanceApi;
 using Equinor.Maintenance.API.EventEnhancer.Middlewares;
 using Equinor.Maintenance.API.EventEnhancer.Models;
 using MediatR;
@@ -76,7 +77,7 @@ services.AddMicrosoftIdentityWebApiAuthentication(config,
 services.AddHttpClient(Names.MainteanceApi,
                        cli => cli.BaseAddress = new Uri(config.GetConnectionString(nameof(ConnectionStrings.MaintenanceApi))))
         .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
-
+services.AddScoped<MaintenanceApiClient>();
 services.AddAuthorization(opts =>
                           {
                               opts.AddPolicy(Policy.Publish,
