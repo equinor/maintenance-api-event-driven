@@ -7,6 +7,9 @@ spec:
     - name: development
       build:
         from: main
+    - name: test
+    - name: qa
+#    - name: production
   components:
     - name: api
       src: Equinor.Maintenance.API.EventEnhancer
@@ -22,4 +25,12 @@ spec:
         - environment: development
           variables:
             ASPNETCORE_ENVIRONMENT: "Development"
-    
+        - environment: test
+          variables:
+            ASPNETCORE_ENVIRONMENT: "Test"
+        - environment: qa
+          variables:
+            ASPNETCORE_ENVIRONMENT: "QA"
+#        - environment: production
+#          variables:
+#            ASPNETCORE_ENVIRONMENT: "Production"

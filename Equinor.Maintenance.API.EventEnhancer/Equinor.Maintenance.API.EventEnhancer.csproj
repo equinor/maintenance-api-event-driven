@@ -34,6 +34,21 @@
     <Content Include="..\OpenAPI\api-contract.yaml">
       <Link>OpenAPI\api-contract.yaml</Link>
     </Content>
+    <Content Include="..\radixconfig.yaml">
+      <Link>radixconfig.yaml</Link>
+    </Content>
+    <Content Update="appsettings.Development.json">
+      <DependentUpon>appsettings.json</DependentUpon>
+    </Content>
+    <Content Update="appsettings.QA.json">
+      <DependentUpon>appsettings.json</DependentUpon>
+    </Content>
+    <Content Update="appsettings.Test.json">
+      <DependentUpon>appsettings.json</DependentUpon>
+    </Content>
+    <Content Update="appsettings.Production.json">
+      <DependentUpon>appsettings.json</DependentUpon>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>
