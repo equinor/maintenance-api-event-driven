@@ -4,7 +4,7 @@ metadata:
   name: maintenance-api-event-enhancer
 spec:
   environments:
-    - name: development
+    - name: sandbox
       build:
         from: main
     - name: test
@@ -22,9 +22,9 @@ spec:
       ingressConfiguration:
         - leastconnectedlb
       environmentConfig:
-        - environment: development
+        - environment: sandbox
           variables:
-            ASPNETCORE_ENVIRONMENT: "Development"
+            ASPNETCORE_ENVIRONMENT: "Sandbox"
         - environment: test
           variables:
             ASPNETCORE_ENVIRONMENT: "Test"
