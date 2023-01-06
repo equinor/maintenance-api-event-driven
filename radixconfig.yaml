@@ -4,9 +4,12 @@ metadata:
   name: maintenance-api-event-enhancer
 spec:
   environments:
-    - name: development
+    - name: sandbox
       build:
         from: main
+    - name: test
+    - name: qa
+#    - name: production
   components:
     - name: api
       src: Equinor.Maintenance.API.EventEnhancer
@@ -19,7 +22,15 @@ spec:
       ingressConfiguration:
         - leastconnectedlb
       environmentConfig:
-        - environment: development
+        - environment: sandbox
           variables:
-            ASPNETCORE_ENVIRONMENT: "Development"
-    
+            ASPNETCORE_ENVIRONMENT: "Sandbox"
+        - environment: test
+          variables:
+            ASPNETCORE_ENVIRONMENT: "Test"
+        - environment: qa
+          variables:
+            ASPNETCORE_ENVIRONMENT: "QA"
+#        - environment: production
+#          variables:
+#            ASPNETCORE_ENVIRONMENT: "Production"

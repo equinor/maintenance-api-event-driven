@@ -9,13 +9,22 @@
     }
   },
   "profiles": {
-    "Equinor.Maintenance.API.EventEnhancer": {
+    "Dev.Equinor.Maintenance.API.EventEnhancer": {
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": false,
       "applicationUrl": "https://localhost:5006;http://localhost:5005",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    },
+    "Sbx.Equinor.Maintenance.API.EventEnhancer": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": false,
+      "applicationUrl": "https://localhost:5006;http://localhost:5005",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Sandbox"
       }
     },
     "IIS Express": {
