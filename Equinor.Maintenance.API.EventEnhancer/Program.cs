@@ -26,6 +26,8 @@ var config   = builder.Configuration;
 //var environment = builder.Environment;
 
 // Add services to the container.
+if (builder.Environment.IsEnvironment("Sandbox")) config.AddUserSecrets<Program>(optional:true);
+
 services.AddOptions<AzureAd>()
         .Bind(config.GetSection(nameof(AzureAd)))
         //.Validate(ad => ad.AllowedWebHookOrigins.Any(), "AllowedWebHookOrigins must be populated")
@@ -40,7 +42,7 @@ Environment.SetEnvironmentVariable("AZURE_TENANT_ID", azureAd.TenantId);
 Environment.SetEnvironmentVariable("AZURE_CLIENT_ID", azureAd.ClientId);
 Environment.SetEnvironmentVariable("AZURE_CLIENT_SECRET", azureAd.ClientSecret);
 var kvUrl = config.GetConnectionString(nameof(ConnectionStrings.KeyVault));
-config["AzureAd:ClientCertificates:0:KeyVaultUrl"] = kvUrl;
+azureAd.ClientCertificates.First().KeyVaultUrl = kvUrl;
 
 config.AddAzureKeyVault(new Uri(kvUrl),
                         new ClientSecretCredential(azureAd.TenantId, azureAd.ClientId, azureAd.ClientSecret),
@@ -49,7 +51,8 @@ config.AddAzureKeyVault(new Uri(kvUrl),
 services.AddHttpContextAccessor();
 services.AddApplicationInsightsTelemetry(opts => opts.ConnectionString
                                              = config.GetConnectionString(nameof(ConnectionStrings.ApplicationInsights)));
-var logSwitch = new LoggingLevelSwitch();
+
+var logSwitch = new LoggingLevelSwitch(LogEventLevel.Verbose);
 builder.Host.UseSerilog((_, svcs, lc) =>
                         {
                             lc.MinimumLevel.ControlledBy(logSwitch)
@@ -88,12 +91,18 @@ services.AddAuthorization(opts =>
                                                  policyBuilder.RequireClaim(JwtRegisteredClaimNames.Azp,
                                                                             config.GetSection("AllowedClients")
                                                                                   .AsEnumerable()
-                                                                                  .Select(pair => pair.Value));
+                                                                                  .Where(pair => !string.IsNullOrWhiteSpace(pair.Value))
+                                                                                  .Select(pair => pair.Value)!);
+
                                              });
                               opts.AddPolicy(Policy.WebHookOrigin,
                                              policyBuilder =>
                                              {
-                                                 policyBuilder.AddRequirements(new WebHookOriginRequirement(azureAd.AllowedWebHookOrigins));
+                                                 policyBuilder.AddRequirements(new WebHookOriginRequirement(config.GetSection("AzureAd:AllowedWebHookOrigins")
+                                                                                   .AsEnumerable()
+                                                                                   .Where(pair => !string.IsNullOrWhiteSpace(pair.Value))
+                                                                                   .Select(pair =>pair.Value!)
+                                                                                   .ToArray()));
                                              });
                           });
 
