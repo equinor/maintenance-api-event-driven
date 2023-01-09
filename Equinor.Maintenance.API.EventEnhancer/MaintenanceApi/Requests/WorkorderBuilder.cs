@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.WebUtilities;
 
-namespace Equinor.Maintenance.API.EventEnhancer.MaintenanceApiClient.Requests;
+namespace Equinor.Maintenance.API.EventEnhancer.MaintenanceApi.Requests;
 
 public class WorkorderBuilder
 {

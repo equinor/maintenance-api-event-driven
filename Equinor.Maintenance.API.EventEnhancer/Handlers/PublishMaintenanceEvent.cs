@@ -1,16 +1,14 @@
-using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Azure.Messaging.ServiceBus;
 using Equinor.Maintenance.API.EventEnhancer.Constants;
-using Equinor.Maintenance.API.EventEnhancer.MaintenanceApiClient.Requests;
+using Equinor.Maintenance.API.EventEnhancer.MaintenanceApi;
 using Equinor.Maintenance.API.EventEnhancer.Models;
 using JetBrains.Annotations;
 using MediatR;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Identity.Web;
-using Microsoft.Net.Http.Headers;
+using RestSharp;
 
 namespace Equinor.Maintenance.API.EventEnhancer.Handlers;
 
@@ -27,58 +25,65 @@ public class PublishMaintenanceEventQuery : IRequest<PublishMaintenanceEventResu
 public class PublishMaintenanceEvent : IRequestHandler<PublishMaintenanceEventQuery, PublishMaintenanceEventResult>
 {
     private readonly ServiceBusClient _serviceBus;
-    private readonly ITokenAcquisition _tokenAcquisition;
-    private readonly IConfiguration _config;
-    private readonly HttpClient _client;
+    // private readonly ITokenAcquisition _tokenAcquisition;
+    // private readonly IConfiguration _config;
+    // private readonly HttpClient _client;
     private readonly ILogger<PublishMaintenanceEvent> _logger;
+    private readonly MaintenanceApiClient _mapiClient;
 
     public PublishMaintenanceEvent(
         ServiceBusClient serviceBus,
         ITokenAcquisition tokenAcquisition,
         IConfiguration config,
         IHttpClientFactory factory,
-        ILogger<PublishMaintenanceEvent> logger)
+        ILogger<PublishMaintenanceEvent> logger,
+        MaintenanceApiClient mapiClient)
     {
         _serviceBus       = serviceBus;
-        _tokenAcquisition = tokenAcquisition;
-        _config           = config;
-        _client           = factory.CreateClient(Names.MainteanceApi);
+        // _tokenAcquisition = tokenAcquisition;
+        // _config           = config;
+        // _client           = factory.CreateClient(Names.MainteanceApi);
         _logger           = logger;
+        _mapiClient  = mapiClient;
     }
 
-    public async Task<PublishMaintenanceEventResult> Handle(PublishMaintenanceEventQuery query, CancellationToken cancellationToken)
+    public async Task<PublishMaintenanceEventResult> Handle(PublishMaintenanceEventQuery query, CancellationToken ct)
     {
         var data           = query.MaintenanceEventPublish.Data;
         var objectId       = data.ObjectId.TrimStart('0');
-        var tokenAwaitable = _tokenAcquisition.GetAccessTokenForAppAsync($"{_config["MaintenanceApiClientId"]}/.default");
+        // var tokenAwaitable = _tokenAcquisition.GetAccessTokenForAppAsync($"{_config["MaintenanceApiClientId"]}/.default");
 
-        var request = data switch
-                      {
-                          (_, "BUS2007", _) => WorkorderBuilder.BuildCorrectiveLookup(objectId),
-                          (_, "BUS2078", _) => MaintenanceRecordsBuilder.BuildFailureReportLookup(objectId),
-                          _                 => throw new ArgumentOutOfRangeException(nameof(data))
-                      };
+        // var request = data switch
+        //               {
+        //                   (_, "BUS2007", _) => WorkorderBuilder.BuildCorrectiveLookup(objectId),
+        //                   (_, "BUS2078", _) => MaintenanceRecordsBuilder.BuildFailureReportLookup(objectId),
+        //                   _                 => throw new ArgumentOutOfRangeException(nameof(data))
+        //               };
 
-        var tokenHeader = new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, await tokenAwaitable);
-        var requestMessage = new HttpRequestMessage
-                             {
-                                 RequestUri = new Uri(request, UriKind.Relative),
-                                 Headers    = { { HeaderNames.Authorization, tokenHeader.ToString() } }
-                             };
-        var result = await _client.SendAsync(requestMessage, cancellationToken);
+        // var tokenHeader = new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, await tokenAwaitable);
+        // var requestMessage = new HttpRequestMessage
+        //                      {
+        //                          RequestUri = new Uri(request, UriKind.Relative),
+        //                          Headers    = { { HeaderNames.Authorization, tokenHeader.ToString() } }
+        //                      };
+        // var result = await _client.SendAsync(requestMessage, cancellationToken);
+        var result         =  data switch
+        {
+            (_, "BUS2007", _) => await _mapiClient.LookupCorrectiveWorkOrder(objectId, ct),
+            (_, "BUS2078", _) => await  _mapiClient.LookupFailureReport(objectId, ct),
+            _                 => throw new ArgumentOutOfRangeException(nameof(data))
+        };
         
-
-        var processedResult = await HandleResult(query, cancellationToken, result, data.Event, objectId);
+        var processedResult = await HandleResult(query, ct, result, data.Event, objectId);
         if (processedResult.Data is null && processedResult.StatusCode == StatusCodes.Status301MovedPermanently)
         {
-            var requestRedirectMessage = new HttpRequestMessage
-                                         {
-                                             RequestUri = result.Headers.Location,
-                                             Headers    = { { HeaderNames.Authorization, tokenHeader.ToString() } }
-                                         };
-            var redirectResult = await _client.SendAsync(requestRedirectMessage, cancellationToken);
+            var locationHeader = result.Headers?.FirstOrDefault(hp => string.Equals(hp.Name, "location", StringComparison.OrdinalIgnoreCase));
 
-            return await HandleResult(query, cancellationToken, redirectResult, data.Event, objectId);
+            if (string.IsNullOrWhiteSpace(locationHeader?.Value?.ToString())) return processedResult with { StatusCode = StatusCodes.Status404NotFound };
+            
+            var redirectResult = await _mapiClient.FollowRedirect(locationHeader.Value.ToString()!, ct);
+            
+            return await HandleResult(query, ct, redirectResult, data.Event, objectId);
         }
 
         return processedResult;
@@ -87,7 +92,7 @@ public class PublishMaintenanceEvent : IRequestHandler<PublishMaintenanceEventQu
     private async Task<PublishMaintenanceEventResult> HandleResult(
         PublishMaintenanceEventQuery query,
         CancellationToken cancellationToken,
-        HttpResponseMessage result,
+        RestResponse<JsonObject> result,
         string @event,
         string objectId)
     {
@@ -97,20 +102,19 @@ public class PublishMaintenanceEvent : IRequestHandler<PublishMaintenanceEventQu
                              Environment.NewLine,
                              result.StatusCode,
                              Environment.NewLine,
-                             await result.Content.ReadAsStringAsync(cancellationToken));
+                             result.Content);
 
             return new PublishMaintenanceEventResult(null, (int)result.StatusCode);
         }
 
-            
-        var (type, sourcePart) = CheckEventAndSetProps(@event, result.RequestMessage?.RequestUri?.Segments[3].TrimEnd('/') ?? ""); 
+        var (type, sourcePart) = CheckEventAndSetProps(@event, result.Request?.Resource.Split('/')[1] ?? "");
         var messageToHook = new MaintenanceEventHook("1.0",
                                                      type,
                                                      query.MaintenanceEventPublish.Id,
                                                      query.MaintenanceEventPublish.Time,
                                                      objectId,
                                                      sourcePart,
-                                                     await result.Content.ReadFromJsonAsync<JsonObject>(cancellationToken: cancellationToken));
+                                                     result.Data);
         var maintenanceEvent = new ServiceBusMessage(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(messageToHook)));
         var sender           = _serviceBus.CreateSender(Names.Topic);
         await sender.SendMessageAsync(maintenanceEvent, cancellationToken);
