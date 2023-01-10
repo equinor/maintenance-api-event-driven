@@ -8,8 +8,7 @@ using Equinor.Maintenance.API.EventEnhancer.MaintenanceApiClient.Requests;
 using Equinor.Maintenance.API.EventEnhancer.Models;
 using JetBrains.Annotations;
 using MediatR;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.Identity.Web;
+using Microsoft.Identity.Client;
 using Microsoft.Net.Http.Headers;
 
 namespace Equinor.Maintenance.API.EventEnhancer.Handlers;
@@ -27,21 +26,21 @@ public class PublishMaintenanceEventQuery : IRequest<PublishMaintenanceEventResu
 public class PublishMaintenanceEvent : IRequestHandler<PublishMaintenanceEventQuery, PublishMaintenanceEventResult>
 {
     private readonly ServiceBusClient _serviceBus;
-    private readonly ITokenAcquisition _tokenAcquisition;
     private readonly IConfiguration _config;
+    private readonly IConfidentialClientApplication _confidentialClientApplication;
     private readonly HttpClient _client;
     private readonly ILogger<PublishMaintenanceEvent> _logger;
 
     public PublishMaintenanceEvent(
         ServiceBusClient serviceBus,
-        ITokenAcquisition tokenAcquisition,
         IConfiguration config,
         IHttpClientFactory factory,
+        IConfidentialClientApplication confidentialClientApplication,
         ILogger<PublishMaintenanceEvent> logger)
     {
         _serviceBus       = serviceBus;
-        _tokenAcquisition = tokenAcquisition;
         _config           = config;
+        _confidentialClientApplication         = confidentialClientApplication;
         _client           = factory.CreateClient(Names.MainteanceApi);
         _logger           = logger;
     }
@@ -50,7 +49,7 @@ public class PublishMaintenanceEvent : IRequestHandler<PublishMaintenanceEventQu
     {
         var data           = query.MaintenanceEventPublish.Data;
         var objectId       = data.ObjectId.TrimStart('0');
-        var tokenAwaitable = _tokenAcquisition.GetAccessTokenForAppAsync($"{_config["MaintenanceApiClientId"]}/.default");
+        var tokenAwaitable = _confidentialClientApplication.AcquireTokenForClient(new[] { $"{_config["MaintenanceApiClientId"]}/.default" }).ExecuteAsync(cancellationToken);
 
         var request = data switch
                       {
@@ -59,7 +58,8 @@ public class PublishMaintenanceEvent : IRequestHandler<PublishMaintenanceEventQu
                           _                 => throw new ArgumentOutOfRangeException(nameof(data))
                       };
 
-        var tokenHeader = new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, await tokenAwaitable);
+        var tokenHeader = new AuthenticationHeaderValue(Microsoft.Identity.Web.Constants.Bearer,  (await tokenAwaitable).AccessToken);
+       
         var requestMessage = new HttpRequestMessage
                              {
                                  RequestUri = new Uri(request, UriKind.Relative),

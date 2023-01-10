@@ -1,4 +1,5 @@
 using System.Net.Mime;
+using System.Security.Cryptography.X509Certificates;
 using Azure.Extensions.AspNetCore.Configuration.Secrets;
 using Azure.Identity;
 using Equinor.Maintenance.API.EventEnhancer.ConfigSections;
@@ -13,9 +14,11 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Azure;
 using Microsoft.Extensions.Primitives;
+using Microsoft.Identity.Client;
 using Microsoft.Identity.Web;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Serilog;
+using Serilog.Events;
 using Serilog.Sinks.SystemConsole.Themes;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -25,27 +28,19 @@ var config   = builder.Configuration;
 //var environment = builder.Environment;
 
 // Add services to the container.
-if (builder.Environment.IsEnvironment("Sandbox")) config.AddUserSecrets<Program>(optional:true);
+if (builder.Environment.IsEnvironment("Sandbox")) config.AddUserSecrets<Program>(optional: true);
 
+var preKvAzureAd = config.GetSection(Constants.AzureAd).Get<AzureAd>();
 
-
-var azureAd = config.GetSection(nameof(AzureAd)).Get<AzureAd>();
-Environment.SetEnvironmentVariable("AZURE_TENANT_ID", azureAd.TenantId);
-Environment.SetEnvironmentVariable("AZURE_CLIENT_ID", azureAd.ClientId);
-Environment.SetEnvironmentVariable("AZURE_CLIENT_SECRET", azureAd.ClientSecret);
-config.AddAzureKeyVault(new Uri(config.GetConnectionString(nameof(ConnectionStrings.KeyVault)) ?? throw new ValidationException("Azure Keyvault Url must be populated")),
-                        new ClientSecretCredential(azureAd.TenantId, azureAd.ClientId, azureAd.ClientSecret),
+config.AddAzureKeyVault(new Uri(config.GetConnectionString(nameof(ConnectionStrings.KeyVault)) ??
+                                throw new ValidationException("Azure Keyvault Url must be populated")),
+                        new ClientSecretCredential(preKvAzureAd.TenantId, preKvAzureAd.ClientId, preKvAzureAd.ClientSecret),
                         new AzureKeyVaultConfigurationOptions { ReloadInterval = TimeSpan.FromHours(0.5) });
-services.AddOptions<AzureAd>()
-        .Bind(config.GetSection(nameof(AzureAd)))
-        .Validate(ad => ad.AllowedWebHookOrigins.Any(), "AllowedWebHookOrigins must be populated")
-        // .Validate(ad => !string.IsNullOrWhiteSpace(ad.ClientId), "ClientId must be populated")
-        // .Validate(ad => !string.IsNullOrWhiteSpace(ad.ClientSecret), "ClientSecret must be populated")
-        // .Validate(ad => !string.IsNullOrWhiteSpace(ad.TenantId), "TenantId must be populated")
-        .Validate(ad => !string.IsNullOrWhiteSpace(ad.Instance), "Instance must be populated")
-        .Validate(ad =>ad.ClientCertificates.Length > 0, "There must be at least one client certificate(for system user)")
-        .ValidateOnStart();
 
+services.AddOptions<AzureAd>()
+        .Bind(config.GetSection(Constants.AzureAd))
+        .Validate(ad => !string.IsNullOrWhiteSpace(ad.Instance), "Instance must be populated")
+        .ValidateOnStart();
 
 services.AddHttpContextAccessor();
 services.AddApplicationInsightsTelemetry(opts => opts.ConnectionString
@@ -54,23 +49,35 @@ services.AddApplicationInsightsTelemetry(opts => opts.ConnectionString
 builder.Host.UseSerilog((ctx, svcs, lc) =>
                         {
                             lc.ReadFrom.Configuration(ctx.Configuration)
-                                .Enrich.FromLogContext()
-                              .WriteTo.Console(theme: AnsiConsoleTheme.Literate, outputTemplate:"[{Timestamp:HH:mm:ss} {Level:u3} {SourceContext:l}] {Message:lj}{NewLine}{Exception}")
+                              .Enrich.FromLogContext()
+                              .WriteTo.Console(theme: AnsiConsoleTheme.Literate,
+                                               outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3} {SourceContext:l}] {Message:lj}{NewLine}{Exception}")
                               .WriteTo.ApplicationInsights(svcs.GetRequiredService<TelemetryConfiguration>(),
-                                                           TelemetryConverter.Traces);
+                                                           TelemetryConverter.Traces, 
+                                                           LogEventLevel.Error);
                         });
 services.AddScoped<LogOriginHeader>();
 services.AddScoped<IAuthorizationHandler, WebHookOriginHandler>();
 
 services.AddMicrosoftIdentityWebApiAuthentication(config,
                                                   subscribeToJwtBearerMiddlewareDiagnosticsEvents:
-                                                  config.GetValue<bool>("SubscribeToDiagnosticEvents"))
-        .EnableTokenAcquisitionToCallDownstreamApi()
-        .AddInMemoryTokenCaches();
+                                                  config.GetValue<bool>("SubscribeToDiagnosticEvents"));
 
 services.AddHttpClient(Names.MainteanceApi,
                        cli => cli.BaseAddress = new Uri(config.GetConnectionString(nameof(ConnectionStrings.MaintenanceApi))))
         .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+services.AddSingleton<IConfidentialClientApplication>(_ =>
+                                                      {
+                                                          var azureAdConfig = config.GetRequiredSection(Constants.AzureAd).Get<AzureAd>();
+
+                                                          return ConfidentialClientApplicationBuilder.Create(azureAdConfig!.ClientId)
+                                                              .WithCertificate(new X509Certificate2(Convert.FromBase64String(config
+                                                                                                            ["AuthCertForMaintenanceAPI"] ??
+                                                                                                        throw new
+                                                                                                            InvalidOperationException("SystemUser Cert null"))))
+                                                              .WithTenantId(azureAdConfig.TenantId)
+                                                              .Build();
+                                                      });
 
 services.AddAuthorization(opts =>
                           {
@@ -83,23 +90,20 @@ services.AddAuthorization(opts =>
                                                                                   .AsEnumerable()
                                                                                   .Where(pair => !string.IsNullOrWhiteSpace(pair.Value))
                                                                                   .Select(pair => pair.Value)!);
-
                                              });
                               opts.AddPolicy(Policy.WebHookOrigin,
                                              policyBuilder =>
                                              {
-                                                 policyBuilder.AddRequirements(new WebHookOriginRequirement(config.GetSection("AzureAd:AllowedWebHookOrigins")
+                                                 policyBuilder.AddRequirements(new WebHookOriginRequirement(config
+                                                                                   .GetSection("AzureAd:AllowedWebHookOrigins")
                                                                                    .AsEnumerable()
                                                                                    .Where(pair => !string.IsNullOrWhiteSpace(pair.Value))
-                                                                                   .Select(pair =>pair.Value!)
+                                                                                   .Select(pair => pair.Value!)
                                                                                    .ToArray()));
                                              });
                           });
 
-services.AddAzureClients(clientBuilder =>
-                         {
-                             clientBuilder.AddServiceBusClient(config.GetConnectionString(nameof(ConnectionStrings.ServiceBus)));
-                         });
+services.AddAzureClients(clientBuilder => { clientBuilder.AddServiceBusClient(config.GetConnectionString(nameof(ConnectionStrings.ServiceBus))); });
 services.AddMediatR(typeof(Program));
 
 var app = builder.Build();
