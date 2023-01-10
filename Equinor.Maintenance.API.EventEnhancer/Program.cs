@@ -6,6 +6,7 @@ using Equinor.Maintenance.API.EventEnhancer.Constants;
 using Equinor.Maintenance.API.EventEnhancer.Handlers;
 using Equinor.Maintenance.API.EventEnhancer.Middlewares;
 using Equinor.Maintenance.API.EventEnhancer.Models;
+using FluentValidation;
 using MediatR;
 using Microsoft.ApplicationInsights.Extensibility;
 using Microsoft.AspNetCore.Authorization;
@@ -15,8 +16,6 @@ using Microsoft.Extensions.Primitives;
 using Microsoft.Identity.Web;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Serilog;
-using Serilog.Core;
-using Serilog.Events;
 using Serilog.Sinks.SystemConsole.Themes;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -28,47 +27,39 @@ var config   = builder.Configuration;
 // Add services to the container.
 if (builder.Environment.IsEnvironment("Sandbox")) config.AddUserSecrets<Program>(optional:true);
 
-services.AddOptions<AzureAd>()
-        .Bind(config.GetSection(nameof(AzureAd)))
-        //.Validate(ad => ad.AllowedWebHookOrigins.Any(), "AllowedWebHookOrigins must be populated")
-        .Validate(ad => !string.IsNullOrWhiteSpace(ad.ClientId), "ClientId must be populated")
-        .Validate(ad => !string.IsNullOrWhiteSpace(ad.ClientSecret), "ClientSecret must be populated")
-        .Validate(ad => !string.IsNullOrWhiteSpace(ad.TenantId), "TenantId must be populated")
-        .Validate(ad => !string.IsNullOrWhiteSpace(ad.Instance), "Instance must be populated")
-        .ValidateOnStart();
+
 
 var azureAd = config.GetSection(nameof(AzureAd)).Get<AzureAd>();
 Environment.SetEnvironmentVariable("AZURE_TENANT_ID", azureAd.TenantId);
 Environment.SetEnvironmentVariable("AZURE_CLIENT_ID", azureAd.ClientId);
 Environment.SetEnvironmentVariable("AZURE_CLIENT_SECRET", azureAd.ClientSecret);
-var kvUrl = config.GetConnectionString(nameof(ConnectionStrings.KeyVault));
-azureAd.ClientCertificates.First().KeyVaultUrl = kvUrl;
 
-config.AddAzureKeyVault(new Uri(kvUrl),
+
+config.AddAzureKeyVault(new Uri(config.GetConnectionString(nameof(ConnectionStrings.KeyVault)) ?? throw new ValidationException("Azure Keyvault Url must be populated")),
                         new ClientSecretCredential(azureAd.TenantId, azureAd.ClientId, azureAd.ClientSecret),
                         new AzureKeyVaultConfigurationOptions { ReloadInterval = TimeSpan.FromHours(0.5) });
+services.AddOptions<AzureAd>()
+        .Bind(config.GetSection(nameof(AzureAd)))
+        .Validate(ad => ad.AllowedWebHookOrigins.Any(), "AllowedWebHookOrigins must be populated")
+        .Validate(ad => !string.IsNullOrWhiteSpace(ad.ClientId), "ClientId must be populated")
+        .Validate(ad => !string.IsNullOrWhiteSpace(ad.ClientSecret), "ClientSecret must be populated")
+        .Validate(ad => !string.IsNullOrWhiteSpace(ad.TenantId), "TenantId must be populated")
+        .Validate(ad => !string.IsNullOrWhiteSpace(ad.Instance), "Instance must be populated")
+        .Validate(ad =>ad.ClientCertificates.Length > 0, "There must be at least one client certificate(for system user)")
+        .ValidateOnStart();
 
 services.AddHttpContextAccessor();
 services.AddApplicationInsightsTelemetry(opts => opts.ConnectionString
                                              = config.GetConnectionString(nameof(ConnectionStrings.ApplicationInsights)));
 
-var logSwitch = new LoggingLevelSwitch(LogEventLevel.Verbose);
-builder.Host.UseSerilog((_, svcs, lc) =>
+builder.Host.UseSerilog((ctx, svcs, lc) =>
                         {
-                            lc.MinimumLevel.ControlledBy(logSwitch)
-                              .MinimumLevel.Override("Microsoft.IdentityModel.LoggingExtensions.IdentityLoggerAdapter", LogEventLevel.Error)
-                              .MinimumLevel.Override("Microsoft.Identity.Web.TokenAcquisition", LogEventLevel.Warning)
-                              .MinimumLevel.Override("Azure.Core", LogEventLevel.Warning)
-                              .MinimumLevel.Override("Azure.Identity", LogEventLevel.Warning)
-                              .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
-                              .MinimumLevel.Override("Microsoft.Hosting.Lifetime", LogEventLevel.Information)
-                              .Enrich.FromLogContext()
+                            lc.ReadFrom.Configuration(ctx.Configuration)
+                                .Enrich.FromLogContext()
                               .WriteTo.Console(theme: AnsiConsoleTheme.Literate, outputTemplate:"[{Timestamp:HH:mm:ss} {Level:u3} {SourceContext:l}] {Message:lj}{NewLine}{Exception}")
                               .WriteTo.ApplicationInsights(svcs.GetRequiredService<TelemetryConfiguration>(),
-                                                           TelemetryConverter.Traces,
-                                                           levelSwitch: logSwitch);
+                                                           TelemetryConverter.Traces);
                         });
-services.AddSingleton(logSwitch);
 services.AddScoped<LogOriginHeader>();
 services.AddScoped<IAuthorizationHandler, WebHookOriginHandler>();
 

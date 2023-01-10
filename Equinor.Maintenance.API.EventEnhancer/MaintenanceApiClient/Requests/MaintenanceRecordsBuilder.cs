@@ -4,7 +4,7 @@ namespace Equinor.Maintenance.API.EventEnhancer.MaintenanceApiClient.Requests;
 
 public class MaintenanceRecordsBuilder
 {
-    private const string Uri = "maintenance-api/maintenance-records/{0}/{1}";
+    private const string Uri = "maintenance-records/{0}/{1}";
     private static readonly Dictionary<string, string?> CommonQueryParams = new()
                                                                             {
                                                                                 { "api-version", "v1" },

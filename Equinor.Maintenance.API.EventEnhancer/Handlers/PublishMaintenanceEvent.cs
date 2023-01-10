@@ -65,6 +65,7 @@ public class PublishMaintenanceEvent : IRequestHandler<PublishMaintenanceEventQu
                                  RequestUri = new Uri(request, UriKind.Relative),
                                  Headers    = { { HeaderNames.Authorization, tokenHeader.ToString() } }
                              };
+        _logger.LogDebug("Calling Maintenance API on {Verb} {Path}", requestMessage.Method.Method, requestMessage.RequestUri.ToString());
         var result = await _client.SendAsync(requestMessage, cancellationToken);
         
 
