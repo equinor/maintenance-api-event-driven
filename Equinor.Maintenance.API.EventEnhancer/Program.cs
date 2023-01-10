@@ -33,20 +33,19 @@ var azureAd = config.GetSection(nameof(AzureAd)).Get<AzureAd>();
 Environment.SetEnvironmentVariable("AZURE_TENANT_ID", azureAd.TenantId);
 Environment.SetEnvironmentVariable("AZURE_CLIENT_ID", azureAd.ClientId);
 Environment.SetEnvironmentVariable("AZURE_CLIENT_SECRET", azureAd.ClientSecret);
-
-
 config.AddAzureKeyVault(new Uri(config.GetConnectionString(nameof(ConnectionStrings.KeyVault)) ?? throw new ValidationException("Azure Keyvault Url must be populated")),
                         new ClientSecretCredential(azureAd.TenantId, azureAd.ClientId, azureAd.ClientSecret),
                         new AzureKeyVaultConfigurationOptions { ReloadInterval = TimeSpan.FromHours(0.5) });
 services.AddOptions<AzureAd>()
         .Bind(config.GetSection(nameof(AzureAd)))
         .Validate(ad => ad.AllowedWebHookOrigins.Any(), "AllowedWebHookOrigins must be populated")
-        .Validate(ad => !string.IsNullOrWhiteSpace(ad.ClientId), "ClientId must be populated")
-        .Validate(ad => !string.IsNullOrWhiteSpace(ad.ClientSecret), "ClientSecret must be populated")
-        .Validate(ad => !string.IsNullOrWhiteSpace(ad.TenantId), "TenantId must be populated")
+        // .Validate(ad => !string.IsNullOrWhiteSpace(ad.ClientId), "ClientId must be populated")
+        // .Validate(ad => !string.IsNullOrWhiteSpace(ad.ClientSecret), "ClientSecret must be populated")
+        // .Validate(ad => !string.IsNullOrWhiteSpace(ad.TenantId), "TenantId must be populated")
         .Validate(ad => !string.IsNullOrWhiteSpace(ad.Instance), "Instance must be populated")
         .Validate(ad =>ad.ClientCertificates.Length > 0, "There must be at least one client certificate(for system user)")
         .ValidateOnStart();
+
 
 services.AddHttpContextAccessor();
 services.AddApplicationInsightsTelemetry(opts => opts.ConnectionString
@@ -97,7 +96,10 @@ services.AddAuthorization(opts =>
                                              });
                           });
 
-services.AddAzureClients(clientBuilder => clientBuilder.AddServiceBusClient(config.GetConnectionString(nameof(ConnectionStrings.ServiceBus))));
+services.AddAzureClients(clientBuilder =>
+                         {
+                             clientBuilder.AddServiceBusClient(config.GetConnectionString(nameof(ConnectionStrings.ServiceBus)));
+                         });
 services.AddMediatR(typeof(Program));
 
 var app = builder.Build();
