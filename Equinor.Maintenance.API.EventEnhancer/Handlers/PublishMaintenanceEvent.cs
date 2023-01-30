@@ -9,6 +9,7 @@ using Equinor.Maintenance.API.EventEnhancer.Models;
 using JetBrains.Annotations;
 using MediatR;
 using Microsoft.Identity.Client;
+using Microsoft.Identity.Web;
 using Microsoft.Net.Http.Headers;
 
 namespace Equinor.Maintenance.API.EventEnhancer.Handlers;
@@ -30,26 +31,30 @@ public class PublishMaintenanceEvent : IRequestHandler<PublishMaintenanceEventQu
     private readonly IConfidentialClientApplication _confidentialClientApplication;
     private readonly HttpClient _client;
     private readonly ILogger<PublishMaintenanceEvent> _logger;
+    private readonly ITokenAcquisition _getToken;
 
     public PublishMaintenanceEvent(
         ServiceBusClient serviceBus,
         IConfiguration config,
         IHttpClientFactory factory,
         IConfidentialClientApplication confidentialClientApplication,
-        ILogger<PublishMaintenanceEvent> logger)
+        ILogger<PublishMaintenanceEvent> logger,
+        ITokenAcquisition getToken)
     {
-        _serviceBus       = serviceBus;
-        _config           = config;
-        _confidentialClientApplication         = confidentialClientApplication;
-        _client           = factory.CreateClient(Names.MainteanceApi);
-        _logger           = logger;
+        _serviceBus                    = serviceBus;
+        _config                        = config;
+        _confidentialClientApplication = confidentialClientApplication;
+        _client                        = factory.CreateClient(Names.MainteanceApi);
+        _logger                        = logger;
+        _getToken                 = getToken;
     }
 
     public async Task<PublishMaintenanceEventResult> Handle(PublishMaintenanceEventQuery query, CancellationToken cancellationToken)
     {
         var data           = query.MaintenanceEventPublish.Data;
         var objectId       = data.ObjectId.TrimStart('0');
-        var tokenAwaitable = _confidentialClientApplication.AcquireTokenForClient(new[] { $"{_config["MaintenanceApiClientId"]}/.default" }).ExecuteAsync(cancellationToken);
+        var tokenAwaitable2 = _confidentialClientApplication.AcquireTokenForClient(new[] { $"{_config["MaintenanceApiClientId"]}/.default" }).ExecuteAsync(cancellationToken);
+        var tokenAwaitable = _getToken.GetAccessTokenForAppAsync($"{_config["MaintenanceApiClientId"]}/.default" ,tokenAcquisitionOptions:new TokenAcquisitionOptions{CancellationToken = cancellationToken});
 
         var request = data switch
                       {
@@ -57,8 +62,8 @@ public class PublishMaintenanceEvent : IRequestHandler<PublishMaintenanceEventQu
                           (_, "BUS2078", _) => MaintenanceRecordsBuilder.BuildFailureReportLookup(objectId),
                           _                 => throw new ArgumentOutOfRangeException(nameof(data))
                       };
-
-        var tokenHeader = new AuthenticationHeaderValue(Microsoft.Identity.Web.Constants.Bearer,  (await tokenAwaitable).AccessToken);
+        var tokenHeader2 = new AuthenticationHeaderValue(Microsoft.Identity.Web.Constants.Bearer,  (await tokenAwaitable2).AccessToken);
+        var tokenHeader = new AuthenticationHeaderValue(Microsoft.Identity.Web.Constants.Bearer,  await tokenAwaitable);
        
         var requestMessage = new HttpRequestMessage
                              {

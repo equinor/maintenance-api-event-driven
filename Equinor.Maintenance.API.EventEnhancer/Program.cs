@@ -10,6 +10,7 @@ using Equinor.Maintenance.API.EventEnhancer.Models;
 using FluentValidation;
 using MediatR;
 using Microsoft.ApplicationInsights.Extensibility;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Azure;
@@ -59,10 +60,29 @@ builder.Host.UseSerilog((ctx, svcs, lc) =>
 services.AddScoped<LogOriginHeader>();
 services.AddScoped<IAuthorizationHandler, WebHookOriginHandler>();
 
-services.AddMicrosoftIdentityWebApiAuthentication(config,
-                                                  subscribeToJwtBearerMiddlewareDiagnosticsEvents:
-                                                  config.GetValue<bool>("SubscribeToDiagnosticEvents"));
-
+// services.AddMicrosoftIdentityWebApiAuthentication(config,
+//                                                   subscribeToJwtBearerMiddlewareDiagnosticsEvents:
+//                                                   config.GetValue<bool>("SubscribeToDiagnosticEvents"));
+services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+        .AddMicrosoftIdentityWebApi(options => config.Bind(Constants.AzureAd, options),
+                                    options =>
+                                    {
+                                        config.Bind(Constants.AzureAd, options);
+                                       // options.ClientSecret = null;
+                                        options.ClientCertificates = new[]
+                                                                     {
+                                                                         new CertificateDescription
+                                                                         {
+                                                                             SourceType         = CertificateSource.Base64Encoded,
+                                                                             Base64EncodedValue = config.GetValue<string>("AuthCertForMaintenanceAPI"),
+                                                                             X509KeyStorageFlags = X509KeyStorageFlags.MachineKeySet
+                                                                         }
+                                                                     };
+                                    })
+        .EnableTokenAcquisitionToCallDownstreamApi(options=> {
+                                                       config.Bind(Constants.AzureAd, options); 
+                                                   })
+        .AddInMemoryTokenCaches();
 services.AddHttpClient(Names.MainteanceApi,
                        cli => cli.BaseAddress = new Uri(config.GetConnectionString(nameof(ConnectionStrings.MaintenanceApi))))
         .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
