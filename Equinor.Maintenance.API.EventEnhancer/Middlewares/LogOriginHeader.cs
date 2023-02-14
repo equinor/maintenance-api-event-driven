@@ -21,7 +21,7 @@ public class LogOriginHeader : IMiddleware
         }
         catch (Exception e)
         {
-            Console.WriteLine(e);
+            _logger.LogError(e.Message);
         }
         finally
         {

@@ -2,7 +2,7 @@
 
 namespace Equinor.Maintenance.API.EventEnhancer.ExtensionMethods;
 
-public static class JsonPropertyStuff
+public static class JsonPropertyExtensions
 {
     public static JsonValue GetJsonObjectPropertyValue(this JsonObject? jsonObject, string propertyName)
     {

@@ -51,10 +51,10 @@ builder.Host.UseSerilog((ctx, svcs, lc) =>
     lc.ReadFrom.Configuration(ctx.Configuration)
         .Enrich.FromLogContext()
         .WriteTo.Console(theme: AnsiConsoleTheme.Literate,
-            outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3} {SourceContext:l}] {Message:lj}{NewLine}{Exception}");
-    //.WriteTo.ApplicationInsights(svcs.GetRequiredService<TelemetryConfiguration>(),
-    //                           TelemetryConverter.Traces, 
-    //                         LogEventLevel.Error);
+            outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3} {SourceContext:l}] {Message:lj}{NewLine}{Exception}")
+        .WriteTo.ApplicationInsights(svcs.GetRequiredService<TelemetryConfiguration>(),
+                               TelemetryConverter.Traces, 
+                             LogEventLevel.Error);
 });
 services.AddScoped<LogOriginHeader>();
 services.AddScoped<IAuthorizationHandler, WebHookOriginHandler>();
