@@ -47,15 +47,15 @@ services.AddApplicationInsightsTelemetry(opts => opts.ConnectionString
                                              = config.GetConnectionString(nameof(ConnectionStrings.ApplicationInsights)));
 
 builder.Host.UseSerilog((ctx, svcs, lc) =>
-                        {
-                            lc.ReadFrom.Configuration(ctx.Configuration)
-                              .Enrich.FromLogContext()
-                              .WriteTo.Console(theme: AnsiConsoleTheme.Literate,
-                                               outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3} {SourceContext:l}] {Message:lj}{NewLine}{Exception}")
-                              .WriteTo.ApplicationInsights(svcs.GetRequiredService<TelemetryConfiguration>(),
-                                                           TelemetryConverter.Traces, 
-                                                           LogEventLevel.Error);
-                        });
+{
+    lc.ReadFrom.Configuration(ctx.Configuration)
+        .Enrich.FromLogContext()
+        .WriteTo.Console(theme: AnsiConsoleTheme.Literate,
+            outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3} {SourceContext:l}] {Message:lj}{NewLine}{Exception}");
+    //.WriteTo.ApplicationInsights(svcs.GetRequiredService<TelemetryConfiguration>(),
+    //                           TelemetryConverter.Traces, 
+    //                         LogEventLevel.Error);
+});
 services.AddScoped<LogOriginHeader>();
 services.AddScoped<IAuthorizationHandler, WebHookOriginHandler>();
 
@@ -132,7 +132,7 @@ app.MapPost(pattern,
             {
                 var result = await mediator.Send(new PublishMaintenanceEventQuery(body), cancelToken);
 
-                return result.StatusCode < 399 ? Results.Created(string.Empty, result.Data) : Results.StatusCode(result.StatusCode);
+                return result.StatusCode < 399 ? Results.Created(new Uri("www.equinor.com"), result.Data) : Results.StatusCode(result.StatusCode);
             })
    .WithName("MaintenanceEventPublish")
    .RequireAuthorization(Policy.Publish);

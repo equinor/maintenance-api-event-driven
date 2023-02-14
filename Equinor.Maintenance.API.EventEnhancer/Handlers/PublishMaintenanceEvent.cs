@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Azure.Messaging.ServiceBus;
 using Equinor.Maintenance.API.EventEnhancer.Constants;
+using Equinor.Maintenance.API.EventEnhancer.ExtensionMethods;
 using Equinor.Maintenance.API.EventEnhancer.MaintenanceApiClient.Requests;
 using Equinor.Maintenance.API.EventEnhancer.Models;
 using JetBrains.Annotations;
@@ -84,7 +85,7 @@ public class PublishMaintenanceEvent : IRequestHandler<PublishMaintenanceEventQu
 
         return processedResult;
     }
-
+    
     private async Task<PublishMaintenanceEventResult> HandleResult(
         PublishMaintenanceEventQuery query,
         CancellationToken cancellationToken,
@@ -104,15 +105,36 @@ public class PublishMaintenanceEvent : IRequestHandler<PublishMaintenanceEventQu
         }
 
             
-        var (type, sourcePart) = CheckEventAndSetProps(@event, result.RequestMessage?.RequestUri?.Segments[3].TrimEnd('/') ?? ""); 
+        var (type, sourcePart) = CheckEventAndSetProps(@event, result.RequestMessage?.RequestUri?.Segments[3].TrimEnd('/') ?? "");
+        var data = await result.Content.ReadFromJsonAsync<JsonObject>(cancellationToken: cancellationToken);
         var messageToHook = new MaintenanceEventHook("1.0",
                                                      type,
                                                      query.MaintenanceEventPublish.Id,
                                                      query.MaintenanceEventPublish.Time,
                                                      objectId,
                                                      sourcePart,
-                                                     await result.Content.ReadFromJsonAsync<JsonObject>(cancellationToken: cancellationToken));
+                                                     data);
         var maintenanceEvent = new ServiceBusMessage(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(messageToHook)));
+        var properties = new Dictionary<string, object>()
+        {
+            { "filter-property-planning-plant-id",  data.GetJsonObjectPropertyValue("planningPlantId").ToString() },
+            { "filter-property-active-status-ids", data.GetJsonObjectPropertyValue("activeStatusIds").ToString() },
+            { "filter-property-work-center-id", data.GetJsonObjectPropertyValue("workCenterId").ToString() },
+            { "filter-property-planner-group-id", data.GetJsonObjectPropertyValue("plannerGroupId").ToString() }
+        };
+        var statuses = data.GetJsonObjectPropertyValueArray("statuses");
+        foreach (var status in statuses)
+        {
+            var sa = status.AsObject();
+            var id = sa.GetJsonObjectPropertyValue("statusId").ToString();
+            var isActive = sa.GetJsonObjectPropertyValue("isActive").AsValue();
+            properties.Add($"filter-property-status-{id}-is-active", isActive.ToString());
+        }
+        
+        foreach (var property in properties)
+        {
+            maintenanceEvent.ApplicationProperties.Add(property);
+        }
         var sender           = _serviceBus.CreateSender(Names.Topic);
         await sender.SendMessageAsync(maintenanceEvent, cancellationToken);
         await sender.CloseAsync(cancellationToken);
