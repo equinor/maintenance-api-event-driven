@@ -60,7 +60,7 @@ public class PublishMaintenanceEvent : IRequestHandler<PublishMaintenanceEventQu
         var request = data switch
                       {
                           (_, "BUS2007", _) => WorkorderBuilder.BuildCorrectiveLookup(objectId),
-                          (_, "BUS2078", _) => MaintenanceRecordsBuilder.BuildFailureReportLookup(objectId),
+                          (_, "BUS2038", _) => MaintenanceRecordsBuilder.BuildFailureReportLookup(objectId),
                           _                 => throw new ArgumentOutOfRangeException(nameof(data))
                       };
         var tokenHeader2 = new AuthenticationHeaderValue(Microsoft.Identity.Web.Constants.Bearer,  (await tokenAwaitable2).AccessToken);
