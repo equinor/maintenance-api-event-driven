@@ -160,9 +160,17 @@ public class PublishMaintenanceEvent : IRequestHandler<PublishMaintenanceEventQu
             case "RELEASED":
                 SetMetaData(ref type, ref sourcePart, $"{input}.released");
 
+                break;                
+            case "TECCOMPLETED":
+                SetMetaData(ref type, ref sourcePart, $"{input}.technical-complete");
+
                 break;
-            case "ZCHANGED":
-                SetMetaData(ref type, ref sourcePart, $"{input}.changed");
+            case "CLOSED":
+                SetMetaData(ref type, ref sourcePart, $"{input}.completed");
+
+                break;                
+            case "INPROCESS":
+                SetMetaData(ref type, ref sourcePart, $"{input}.in-process");
 
                 break;
         }
