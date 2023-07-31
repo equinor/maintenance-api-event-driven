@@ -27,6 +27,6 @@ public record MaintenanceEventHook(
         string Time,
         [property: JsonPropertyName("subject")]string Subject,
         [property: JsonPropertyName("source")]string Source,
-        JsonObject? Data,
+        [property: JsonPropertyName("data")]JsonObject? Data,
         [property: JsonPropertyName("datacontenttype")] string DataContent = MediaTypeNames.Application.Json)
     : MaintenanceEventBase(Specversion, Type, Id, Time);
