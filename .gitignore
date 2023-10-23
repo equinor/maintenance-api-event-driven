@@ -3,3 +3,5 @@
 /Equinor.Maintenance.API.EventEnhancer/obj
 /Equinor.Maintenance.API.EventEnhancer/.idea
 out/
+node_modules
+.env

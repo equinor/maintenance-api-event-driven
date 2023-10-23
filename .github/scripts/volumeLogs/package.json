@@ -1,0 +1,21 @@
+{
+  "name": "volumelogs",
+  "version": "1.0.0",
+  "description": "",
+  "main": "out/index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@azure/identity": "^3.3.0",
+    "@azure/monitor-query": "^1.1.1",
+    "@azure/service-bus": "^7.9.1"
+  },
+  "type": "module",
+  "devDependencies": {
+    "dotenv": "^16.3.1"
+  }
+}
