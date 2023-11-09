@@ -1,7 +1,7 @@
 # Security Policy
 ## Reporting Security Issues
 
- The Maintenance API Team takes security issues in **cbm-integration** seriously. We appreciate your efforts to responsibly disclose your findings, and will make every effort to acknowledge your contributions.
+ The Maintenance API Team takes security issues in **maintenance-api-event-driven** seriously. We appreciate your efforts to responsibly disclose your findings, and will make every effort to acknowledge your contributions.
 
 To report a security issue, please use the GitHub Security tab and click the "Report a Vulnerability" button. In your report, please describe the vulnerability to the best of your ability. Fixes for discovered vulnerabilities are welcome - please attach or summarize it in your report.
 
