@@ -3,8 +3,8 @@
 This repository hosts solutions in order to enable Event Driven Architecture for the Maintenance API landscape.
 
 ## Description
-Within there are or will be folders with different components used to facilitate an event driven architecture for Maintenance API. Most prominently there 
-will be a reactor called the `Event Enhancer` which is used to enrich events from SAP (using Maintenance API) and publising these events to an Azure Service Bus.
+Within there are (or will be) folders with different components used to facilitate an event driven architecture for Maintenance API. Most prominently there 
+will be a reactor called the `Event Enhancer` which is used to enrich events from SAP (using Maintenance API) and publish these events to an Azure Service Bus.
 
 
 ## Installation and usage
@@ -18,4 +18,4 @@ This repository is not looking for any active contribution, but feel free to sub
 a look at it.
 
 ## Support
-No support is offered on this program. Questions (submitted issues) will be answered in the fullness of time. 
+No support is offered for this program. Questions (submitted issues) will be answered in the fullness of time. 
