@@ -1,4 +1,5 @@
-# Maintenance API EventDriven Repository
+[![SCM Compliance](https://scm-compliance-api.radix.equinor.com/repos/equinor/bab9c68e-cc82-4826-9922-a7962de3740e/badge)](https://developer.equinor.com/governance/scm-policy/)
+# Maintenance API Event Driven Repository
 
 This repository hosts solutions in order to enable Event Driven Architecture for the Maintenance API landscape.
 
