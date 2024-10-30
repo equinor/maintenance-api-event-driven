@@ -17,20 +17,30 @@ spec:
       ports:
         - name: http
           port: 5005
-      secrets:
-        - AzureAd__ClientSecret
       ingressConfiguration:
         - leastconnectedlb
       environmentConfig:
         - environment: sandbox
+          identity:
+            azure:
+              clientId: 864ad7ca-19d4-46a9-94e9-5e5baa231e35
           variables:
             ASPNETCORE_ENVIRONMENT: "Sandbox"
         - environment: test
+          identity:
+            azure:
+              clientId: 269af7b3-23cb-4350-b53b-1d3e8d13b6d2
           variables:
             ASPNETCORE_ENVIRONMENT: "Test"
         - environment: qa
+          identity:
+            azure:
+              clientId: 1000f2e5-08bd-4a0c-a571-112d48561bd4
           variables:
             ASPNETCORE_ENVIRONMENT: "QA"
 #        - environment: production
+#            identity:
+#              azure:
+#                clientId: TBD
 #          variables:
 #            ASPNETCORE_ENVIRONMENT: "Production"
