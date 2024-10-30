@@ -1,4 +1,4 @@
-﻿FROM mcr.microsoft.com/dotnet/sdk:7.0-bullseye-slim AS build-env
+﻿FROM mcr.microsoft.com/dotnet/sdk:8.0-alpine AS build-env
 WORKDIR /publish
 
 COPY ./*.csproj .
@@ -8,7 +8,7 @@ RUN  dotnet restore . /property:Configuration=Release
 COPY . .
 RUN dotnet publish . -c Release --output ./out
 
-FROM mcr.microsoft.com/dotnet/aspnet:7.0-bullseye-slim
+FROM mcr.microsoft.com/dotnet/aspnet:8.0-alpine
 WORKDIR /app
 COPY --from=build-env /publish/out .
 
