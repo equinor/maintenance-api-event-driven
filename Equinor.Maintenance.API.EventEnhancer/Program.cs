@@ -31,8 +31,6 @@ var config   = builder.Configuration;
 // Add services to the container.
 if (builder.Environment.IsEnvironment("Sandbox")) config.AddUserSecrets<Program>(optional: true);
 
-var preKvAzureAd = config.GetSection(Constants.AzureAd).Get<AzureAd>();
-
 config.AddAzureKeyVault(new Uri(config.GetConnectionString(nameof(ConnectionStrings.KeyVault)) ??
                                 throw new ValidationException("Azure Keyvault Url must be populated")),
     new DefaultAzureCredential(),
@@ -154,7 +152,7 @@ app.MapPost(pattern,
             var result = await mediator.Send(new PublishMaintenanceEventQuery(body), cancelToken);
 
             return result.StatusCode < 399
-                ? Results.Created(new Uri("www.equinor.com"), result.Data)
+                ? Results.Created(string.Empty, result.Data)
                 : Results.StatusCode(result.StatusCode);
         })
     .WithName("MaintenanceEventPublish")
