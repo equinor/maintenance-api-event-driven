@@ -9,7 +9,6 @@ using Equinor.Maintenance.API.EventEnhancer.MaintenanceApiClient.Requests;
 using Equinor.Maintenance.API.EventEnhancer.Models;
 using JetBrains.Annotations;
 using MediatR;
-using Microsoft.Identity.Client;
 using Microsoft.Identity.Web;
 using Microsoft.Net.Http.Headers;
 
@@ -28,38 +27,21 @@ public class PublishMaintenanceEventQuery : IRequest<PublishMaintenanceEventResu
 }
 
 [UsedImplicitly]
-public class PublishMaintenanceEvent : IRequestHandler<PublishMaintenanceEventQuery, PublishMaintenanceEventResult>
+public class PublishMaintenanceEvent(
+    ServiceBusClient serviceBus,
+    IConfiguration config,
+    IHttpClientFactory factory,
+    ILogger<PublishMaintenanceEvent> logger,
+    ITokenAcquisition getToken)
+    : IRequestHandler<PublishMaintenanceEventQuery, PublishMaintenanceEventResult>
 {
-    private readonly ServiceBusClient _serviceBus;
-    private readonly IConfiguration _config;
-    private readonly IConfidentialClientApplication _confidentialClientApplication;
-    private readonly HttpClient _client;
-    private readonly ILogger<PublishMaintenanceEvent> _logger;
-    private readonly ITokenAcquisition _getToken;
-
-    public PublishMaintenanceEvent(
-        ServiceBusClient serviceBus,
-        IConfiguration config,
-        IHttpClientFactory factory,
-        IConfidentialClientApplication confidentialClientApplication,
-        ILogger<PublishMaintenanceEvent> logger,
-        ITokenAcquisition getToken)
-    {
-        _serviceBus = serviceBus;
-        _config = config;
-        _confidentialClientApplication = confidentialClientApplication;
-        _client = factory.CreateClient(Names.MainteanceApi);
-        _logger = logger;
-        _getToken = getToken;
-    }
+    private readonly HttpClient _client = factory.CreateClient(Names.MainteanceApi);
 
     public async Task<PublishMaintenanceEventResult> Handle(PublishMaintenanceEventQuery query, CancellationToken cancellationToken)
     {
         var data     = query.MaintenanceEventPublish.Data;
         var objectId = data.ObjectId.TrimStart('0');
-        var tokenAwaitable2 = _confidentialClientApplication
-            .AcquireTokenForClient(new[] { $"{_config["MaintenanceApiClientId"]}/.default" }).ExecuteAsync(cancellationToken);
-        var tokenAwaitable = _getToken.GetAccessTokenForAppAsync($"{_config["MaintenanceApiClientId"]}/.default",
+        var tokenAwaitable = getToken.GetAccessTokenForAppAsync($"{config["MaintenanceApiClientId"]}/.default",
             tokenAcquisitionOptions: new TokenAcquisitionOptions { CancellationToken = cancellationToken });
 
         var request = data switch
@@ -68,7 +50,6 @@ public class PublishMaintenanceEvent : IRequestHandler<PublishMaintenanceEventQu
             (_, "BUS2038", _) => MaintenanceRecordsBuilder.BuildFailureReportLookup(objectId),
             _ => throw new ArgumentOutOfRangeException(nameof(data))
         };
-        var tokenHeader2 = new AuthenticationHeaderValue(Microsoft.Identity.Web.Constants.Bearer, (await tokenAwaitable2).AccessToken);
         var tokenHeader  = new AuthenticationHeaderValue(Microsoft.Identity.Web.Constants.Bearer, await tokenAwaitable);
 
         var requestMessage = new HttpRequestMessage
@@ -76,7 +57,7 @@ public class PublishMaintenanceEvent : IRequestHandler<PublishMaintenanceEventQu
             RequestUri = new Uri(request, UriKind.Relative),
             Headers = { { HeaderNames.Authorization, tokenHeader.ToString() } }
         };
-        _logger.LogDebug("Calling Maintenance API on {Verb} {Path}", requestMessage.Method.Method, requestMessage.RequestUri.ToString());
+        logger.LogDebug("Calling Maintenance API on {Verb} {Path}", requestMessage.Method.Method, requestMessage.RequestUri.ToString());
         var result = await _client.SendAsync(requestMessage, cancellationToken);
 
 
@@ -105,7 +86,7 @@ public class PublishMaintenanceEvent : IRequestHandler<PublishMaintenanceEventQu
     {
         if (!result.IsSuccessStatusCode)
         {
-            _logger.LogError("Failed to get data from Maintenance API{Newline}Response Code: {@Code}{NewLine}{ResponseContent}",
+            logger.LogError("Failed to get data from Maintenance API{Newline}Response Code: {@Code}{NewLine}{ResponseContent}",
                 Environment.NewLine,
                 result.StatusCode,
                 Environment.NewLine,
@@ -146,7 +127,7 @@ public class PublishMaintenanceEvent : IRequestHandler<PublishMaintenanceEventQu
             maintenanceEvent.ApplicationProperties.Add(property);
         }
 
-        var sender = _serviceBus.CreateSender(Names.Topic);
+        var sender = serviceBus.CreateSender(Names.Topic);
         await sender.SendMessageAsync(maintenanceEvent, cancellationToken);
         await sender.CloseAsync(cancellationToken);
 

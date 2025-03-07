@@ -2,20 +2,14 @@ using Equinor.Maintenance.API.EventEnhancer.Constants;
 using Microsoft.AspNetCore.Authorization;
 
 namespace Equinor.Maintenance.API.EventEnhancer.Middlewares;
-public class WebHookOriginRequirement : IAuthorizationRequirement
+public class WebHookOriginRequirement(string[] allowedWebHookOrigins) : IAuthorizationRequirement
 {
-    public string[] AllowedWebHookOrigins { get; }
-
-    public WebHookOriginRequirement(string[] allowedWebHookOrigins) { AllowedWebHookOrigins = allowedWebHookOrigins; }
+    public string[] AllowedWebHookOrigins { get; } = allowedWebHookOrigins;
 }
 
-public class WebHookOriginHandler : AuthorizationHandler<WebHookOriginRequirement>
+public class WebHookOriginHandler(IHttpContextAccessor accessor) : AuthorizationHandler<WebHookOriginRequirement>
 {
-    private readonly HttpContext _httpContext;
-    public WebHookOriginHandler(IHttpContextAccessor accessor)
-    {
-        _httpContext = accessor.HttpContext ?? throw new InvalidOperationException("HttpContext was null");
-    }
+    private readonly HttpContext _httpContext = accessor.HttpContext ?? throw new InvalidOperationException("HttpContext was null");
 
     protected override Task HandleRequirementAsync(AuthorizationHandlerContext handlerContext, WebHookOriginRequirement requirement)
     {

@@ -4,12 +4,9 @@ using Microsoft.Net.Http.Headers;
 
 namespace Equinor.Maintenance.API.EventEnhancer.Middlewares;
 
-public class LogOriginHeader : IMiddleware
+public class LogOriginHeader(ILogger<LogOriginHeader> logger) : IMiddleware
 {
-    private readonly ILogger<LogOriginHeader> _logger;
-    private IEnumerable<string> RedactedHeaders = new[] { HeaderNames.Authorization };
-
-    public LogOriginHeader(ILogger<LogOriginHeader> logger) { _logger = logger; }
+    private readonly IEnumerable<string> _redactedHeaders = [HeaderNames.Authorization];
 
     public async Task InvokeAsync(HttpContext context, RequestDelegate next)
     {
@@ -21,28 +18,28 @@ public class LogOriginHeader : IMiddleware
         }
         catch (Exception e)
         {
-            _logger.LogError(e.Message);
+            logger.LogError(e.Message);
         }
         finally
         {
             request.Body.Position = 0;
             var buffer = new byte[Convert.ToInt32(request.ContentLength)];
-            var unused = await request.Body.ReadAsync(buffer, 0, buffer.Length);
+            _ = await request.Body.ReadAsync(buffer);
             //get body string here...
             var requestContent = Encoding.UTF8.GetString(buffer);
-            _logger.LogTrace("SAP Payload: {@Payload}", requestContent);
+            logger.LogTrace("SAP Payload: {@Payload}", requestContent);
             request.Body.Position = 0;
             if (context.Request.Headers.TryGetValue(Names.WebHookRequestHeader, out var webHookOrigin))
-                _logger.LogTrace("Header {HeaderName}: {WebHookOrigin}", Names.WebHookRequestHeader, webHookOrigin);
+                logger.LogTrace("Header {HeaderName}: {WebHookOrigin}", Names.WebHookRequestHeader, webHookOrigin);
             else
-                _logger.LogWarning("Could not find header: {HeaderName}", Names.WebHookRequestHeader);
+                logger.LogWarning("Could not find header: {HeaderName}", Names.WebHookRequestHeader);
 
             var iteration = 1;
             foreach (var header in context.Request.Headers)
             {
-                var headerValue = RedactedHeaders.Contains(header.Key) ? "[Redacted]" : header.Value.FirstOrDefault();
+                var headerValue = _redactedHeaders.Contains(header.Key) ? "[Redacted]" : header.Value.FirstOrDefault();
 
-                _logger.LogTrace("Request Header #{Iteration}: {Key}:{Header}", iteration++, header.Key, headerValue);
+                logger.LogTrace("Request Header #{Iteration}: {Key}:{Header}", iteration++, header.Key, headerValue);
             }
         }
     }
