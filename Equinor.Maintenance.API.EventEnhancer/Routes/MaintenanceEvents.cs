@@ -27,14 +27,16 @@ public static class MaintenanceEvents
             .WithName("MaintenanceEventHandshake")
             .RequireAuthorization(Policy.WebHookOrigin);
     }
-private static Task HandleOptionsRequest(HttpContext ctx)
-                {
-                    ctx.Response.Headers.Allow = new StringValues(HttpMethod.Post.ToString());
-                    ctx.Response.Headers.ContentType = new StringValues(MediaTypeNames.Application.Json);
-                    ctx.Response.StatusCode = StatusCodes.Status200OK;
 
-                    return Task.CompletedTask;
+    private static Task HandleOptionsRequest(HttpContext ctx)
+    {
+        ctx.Response.Headers.Allow = new StringValues(HttpMethod.Post.ToString());
+        ctx.Response.Headers.ContentType = new StringValues(MediaTypeNames.Application.Json);
+        ctx.Response.StatusCode = StatusCodes.Status200OK;
+
+        return Task.CompletedTask;
     }
+
     public static async Task<IResult> Publish([FromBody] MaintenanceEventPublish body, IMediator mediator, CancellationToken cancelToken)
     {
         var result = await mediator.Send(new PublishMaintenanceEventQuery(body), cancelToken);
