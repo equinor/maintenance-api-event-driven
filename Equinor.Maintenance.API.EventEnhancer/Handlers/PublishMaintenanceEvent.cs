@@ -9,7 +9,6 @@ using Equinor.Maintenance.API.EventEnhancer.MaintenanceApiClient.Requests;
 using Equinor.Maintenance.API.EventEnhancer.Models;
 using JetBrains.Annotations;
 using MediatR;
-using Microsoft.Identity.Web;
 using Microsoft.Net.Http.Headers;
 
 namespace Equinor.Maintenance.API.EventEnhancer.Handlers;
@@ -29,10 +28,8 @@ public class PublishMaintenanceEventQuery : IRequest<PublishMaintenanceEventResu
 [UsedImplicitly]
 public class PublishMaintenanceEvent(
     ServiceBusClient serviceBus,
-    IConfiguration config,
     IHttpClientFactory factory,
-    ILogger<PublishMaintenanceEvent> logger,
-    ITokenAcquisition getToken)
+    ILogger<PublishMaintenanceEvent> logger)
     : IRequestHandler<PublishMaintenanceEventQuery, PublishMaintenanceEventResult>
 {
     private readonly HttpClient _client = factory.CreateClient(Names.MainteanceApi);
@@ -41,8 +38,6 @@ public class PublishMaintenanceEvent(
     {
         var data     = query.MaintenanceEventPublish.Data;
         var objectId = data.ObjectId.TrimStart('0');
-        var tokenAwaitable = getToken.GetAccessTokenForAppAsync($"{config["MaintenanceApiClientId"]}/.default",
-            tokenAcquisitionOptions: new TokenAcquisitionOptions { CancellationToken = cancellationToken });
 
         var request = data switch
         {
@@ -50,12 +45,10 @@ public class PublishMaintenanceEvent(
             (_, "BUS2038", _) => MaintenanceRecordsBuilder.BuildFailureReportLookup(objectId),
             _ => throw new ArgumentOutOfRangeException(nameof(data))
         };
-        var tokenHeader  = new AuthenticationHeaderValue(Microsoft.Identity.Web.Constants.Bearer, await tokenAwaitable);
 
         var requestMessage = new HttpRequestMessage
         {
             RequestUri = new Uri(request, UriKind.Relative),
-            Headers = { { HeaderNames.Authorization, tokenHeader.ToString() } }
         };
         logger.LogDebug("Calling Maintenance API on {Verb} {Path}", requestMessage.Method.Method, requestMessage.RequestUri.ToString());
         var result = await _client.SendAsync(requestMessage, cancellationToken);
@@ -66,8 +59,7 @@ public class PublishMaintenanceEvent(
         {
             var requestRedirectMessage = new HttpRequestMessage
             {
-                RequestUri = result.Headers.Location,
-                Headers = { { HeaderNames.Authorization, tokenHeader.ToString() } }
+                RequestUri = result.Headers.Location
             };
             var redirectResult = await _client.SendAsync(requestRedirectMessage, cancellationToken);
 

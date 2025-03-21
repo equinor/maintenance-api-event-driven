@@ -3,6 +3,7 @@ using Azure.Extensions.AspNetCore.Configuration.Secrets;
 using Azure.Identity;
 using Equinor.Maintenance.API.EventEnhancer.ConfigSections;
 using Equinor.Maintenance.API.EventEnhancer.Constants;
+using Equinor.Maintenance.API.EventEnhancer.MaintenanceApiClient;
 using Equinor.Maintenance.API.EventEnhancer.Middlewares;
 using Equinor.Maintenance.API.EventEnhancer.Routes;
 using FluentValidation;
@@ -58,7 +59,6 @@ services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         options =>
         {
             config.Bind(Constants.AzureAd, options);
-            // options.ClientSecret = null;
             options.ClientCertificates =
             [
                 new CertificateDescription
@@ -72,30 +72,33 @@ services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .EnableTokenAcquisitionToCallDownstreamApi(options => config.Bind(Constants.AzureAd, options))
     .AddInMemoryTokenCaches();
 
+services.AddTransient<MaintenanceApiTokenHandler>();
+
 services.AddHttpClient(Names.MainteanceApi,
         cli => cli.BaseAddress = new Uri(config.GetConnectionString(nameof(ConnectionStrings.MaintenanceApi))))
-    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false })
+    .AddHttpMessageHandler<MaintenanceApiTokenHandler>();
 
 
 services.AddAuthorizationBuilder()
     .AddPolicy(Policy.Publish, policyBuilder =>
-        {
-            policyBuilder.RequireRole(Role.Publish);
-            policyBuilder.RequireClaim(JwtRegisteredClaimNames.Azp,
-                config.GetSection("AllowedClients")
-                    .AsEnumerable()
-                    .Where(pair => !string.IsNullOrWhiteSpace(pair.Value))
-                    .Select(pair => pair.Value)!);
-        })
-    .AddPolicy(Policy.WebHookOrigin, policyBuilder =>
-        {
-            policyBuilder.AddRequirements(new WebHookOriginRequirement(config
-                .GetSection("AzureAd:AllowedWebHookOrigins")
+    {
+        policyBuilder.RequireRole(Role.Publish);
+        policyBuilder.RequireClaim(JwtRegisteredClaimNames.Azp,
+            config.GetSection("AllowedClients")
                 .AsEnumerable()
                 .Where(pair => !string.IsNullOrWhiteSpace(pair.Value))
-                .Select(pair => pair.Value!)
-                .ToArray()));
-        });
+                .Select(pair => pair.Value)!);
+    })
+    .AddPolicy(Policy.WebHookOrigin, policyBuilder =>
+    {
+        policyBuilder.AddRequirements(new WebHookOriginRequirement(config
+            .GetSection("AzureAd:AllowedWebHookOrigins")
+            .AsEnumerable()
+            .Where(pair => !string.IsNullOrWhiteSpace(pair.Value))
+            .Select(pair => pair.Value!)
+            .ToArray()));
+    });
 
 services.AddAzureClients(clientBuilder =>
 {
