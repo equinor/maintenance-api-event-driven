@@ -3,7 +3,8 @@ using Azure.Extensions.AspNetCore.Configuration.Secrets;
 using Azure.Identity;
 using Equinor.Maintenance.API.EventEnhancer.ConfigSections;
 using Equinor.Maintenance.API.EventEnhancer.Constants;
-using Equinor.Maintenance.API.EventEnhancer.MaintenanceApiClient;
+using Equinor.Maintenance.API.EventEnhancer.EventSourcing;
+using Equinor.Maintenance.API.EventEnhancer.MaintenanceApi.Handlers;
 using Equinor.Maintenance.API.EventEnhancer.Middlewares;
 using Equinor.Maintenance.API.EventEnhancer.Routes;
 using FluentValidation;
@@ -53,6 +54,8 @@ builder.Host.UseSerilog((ctx, svcs, lc) =>
 });
 services.AddScoped<LogOriginHeader>();
 services.AddScoped<IAuthorizationHandler, WebHookOriginHandler>();
+services.AddScoped<MessagePublisher>();
+services.AddScoped<SourceReactor>();
 
 services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddMicrosoftIdentityWebApi(options => config.Bind(Constants.AzureAd, options),

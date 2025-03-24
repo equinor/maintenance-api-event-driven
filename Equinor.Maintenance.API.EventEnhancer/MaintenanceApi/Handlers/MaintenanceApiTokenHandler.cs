@@ -1,7 +1,7 @@
 using System.Net.Http.Headers;
 using Microsoft.Identity.Web;
 
-namespace Equinor.Maintenance.API.EventEnhancer.MaintenanceApiClient;
+namespace Equinor.Maintenance.API.EventEnhancer.MaintenanceApi.Handlers;
 
 public class MaintenanceApiTokenHandler(ITokenAcquisition tokenAcquisition, IConfiguration config) : DelegatingHandler
 {
