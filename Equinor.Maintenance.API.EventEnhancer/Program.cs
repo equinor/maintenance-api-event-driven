@@ -77,7 +77,7 @@ services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 services.AddTransient<MaintenanceApiTokenHandler>();
 
-services.AddHttpClient(Names.MainteanceApi,
+services.AddHttpClient(Names.MaintenanceApi,
         cli => cli.BaseAddress = new Uri(config.GetConnectionString(nameof(ConnectionStrings.MaintenanceApi))))
     .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false })
     .AddHttpMessageHandler<MaintenanceApiTokenHandler>();

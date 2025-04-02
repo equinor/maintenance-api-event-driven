@@ -24,7 +24,7 @@ public class SourceReactor(IHttpClientFactory factory)
 // rewrite this method to be more generic (work for any type?) and to also construct objects from an allowlist
     private async Task<(JsonObject, Uri)> EnhanceWorkOrder(string objectId)
     {
-        var workOrderClient   = new WorkOrderClient(factory.CreateClient(Names.MainteanceApi));
+        var workOrderClient   = new WorkOrderClient(factory.CreateClient(Names.MaintenanceApi));
         var workOrderResponse = await workOrderClient.WorkOrderExistsAsync([objectId.TrimStart('0')]);
 
         if (!workOrderResponse.IsSuccessStatusCode)
@@ -34,7 +34,7 @@ public class SourceReactor(IHttpClientFactory factory)
         if (workOrderJson is not { Count: > 0 })
             throw new RequestFailedException((int)workOrderResponse.StatusCode, "Work order not found");
 
-        var workOrderType = workOrderJson.First().AsObject();
+        var workOrderType = workOrderJson.FirstOrDefault()?.AsObject() ?? throw new InvalidOperationException($"Failed to find work order from event with id: {objectId.TrimStart('0')}");
         var workOrderLookupResponse =
             await workOrderClient.Lookup(
                 workOrderType
