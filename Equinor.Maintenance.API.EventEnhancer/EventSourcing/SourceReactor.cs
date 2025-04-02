@@ -46,13 +46,14 @@ public class SourceReactor(IHttpClientFactory factory)
         var data = new JsonObject
         {
             ["workOrderId"] = lightWorkOrder.WorkOrderId,
-            ["planningPlant"] = lightWorkOrder.PlanningPlant,
+            ["planningPlantId"] = lightWorkOrder.PlanningPlantId,
             ["activeStatusIds"] = lightWorkOrder.ActiveStatusIds,
             ["workCenterId"] = lightWorkOrder.WorkCenterId,
-            ["plannerGroupId"] = lightWorkOrder.PlannerGroupId
+            ["plannerGroupId"] = lightWorkOrder.PlannerGroupId,
+            //todo add statuses
         };
         return (data, workOrderLookupResponse.RequestMessage.RequestUri);
     }
 }
 
-public record LightWorkOrder(string WorkOrderId, string PlanningPlant, string ActiveStatusIds, string WorkCenterId, string PlannerGroupId);
+public record LightWorkOrder(string WorkOrderId, string PlanningPlantId, string ActiveStatusIds, string WorkCenterId, string PlannerGroupId);

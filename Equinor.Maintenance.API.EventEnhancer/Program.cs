@@ -108,10 +108,20 @@ services.AddAzureClients(clientBuilder =>
     clientBuilder.AddServiceBusClient(config.GetConnectionString(nameof(ConnectionStrings.ServiceBus)));
 });
 services.AddMediatR(typeof(Program));
-
+services.AddProblemDetails();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
+if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Sandbox"))
+{
+    app.UseDeveloperExceptionPage(); // Detailed error page for non-production environments
+}
+else
+{
+    app.UseExceptionHandler();
+    app.UseHsts(); // Enforce strict transport security in production
+}
+
 app.UseSerilogRequestLogging(opts =>
 {
     opts.EnrichDiagnosticContext = (context, httpContext) =>
@@ -122,6 +132,7 @@ app.UseSerilogRequestLogging(opts =>
     };
     opts.MessageTemplate = "HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000} ms {Identity}";
 });
+
 app.UseMiddleware<LogOriginHeader>();
 app.UseHttpsRedirection();
 
@@ -129,6 +140,5 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapMaintenanceEventRoutes();
-
 
 app.Run();
