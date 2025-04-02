@@ -15,8 +15,7 @@ public class PublishMaintenanceEventQuery(MaintenanceEventPublish maintenanceEve
 [UsedImplicitly]
 public class PublishMaintenanceEvent(
     MessagePublisher publisher,
-    SourceReactor sourceReactor,
-    ILogger<PublishMaintenanceEvent> logger)
+    SourceReactor sourceReactor)
     : IRequestHandler<PublishMaintenanceEventQuery, PublishMaintenanceEventResult>
 {
     public async Task<PublishMaintenanceEventResult> Handle(PublishMaintenanceEventQuery query,

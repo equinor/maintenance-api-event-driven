@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using Azure;
 using Equinor.Maintenance.API.EventEnhancer.Constants;
 using Equinor.Maintenance.API.EventEnhancer.ExtensionMethods;
@@ -43,17 +44,12 @@ public class SourceReactor(IHttpClientFactory factory)
 
         var lightWorkOrder = await workOrderLookupResponse.Content.ReadFromJsonAsync<LightWorkOrder>();
 
-        var data = new JsonObject
-        {
-            ["workOrderId"] = lightWorkOrder.WorkOrderId,
-            ["planningPlantId"] = lightWorkOrder.PlanningPlantId,
-            ["activeStatusIds"] = lightWorkOrder.ActiveStatusIds,
-            ["workCenterId"] = lightWorkOrder.WorkCenterId,
-            ["plannerGroupId"] = lightWorkOrder.PlannerGroupId,
-            //todo add statuses
-        };
+        var data = JsonSerializer.SerializeToNode(lightWorkOrder)?.AsObject() 
+               ?? throw new InvalidOperationException("Failed to serialize LightWorkOrder to JsonObject");
         return (data, workOrderLookupResponse.RequestMessage.RequestUri);
     }
 }
 
-public record LightWorkOrder(string WorkOrderId, string PlanningPlantId, string ActiveStatusIds, string WorkCenterId, string PlannerGroupId);
+public record LightWorkOrder(string WorkOrderId, string PlanningPlantId, string ActiveStatusIds, string WorkCenterId, string PlannerGroupId, Status[] Statuses);
+public record Status(string StatusId, [property:JsonPropertyName("status")]string StatusText, bool IsActive, int? StatusOrder, DateTime? ActivatedDateTime);
+

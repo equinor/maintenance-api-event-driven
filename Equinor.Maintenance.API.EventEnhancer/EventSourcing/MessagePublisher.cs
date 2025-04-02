@@ -12,84 +12,85 @@ namespace Equinor.Maintenance.API.EventEnhancer.EventSourcing;
 
 public class MessagePublisher(ServiceBusClient busClient)
 {
-    public async Task<MaintenanceEventHook> Publish(string @event,
-                                                    JsonObject data,
-                                                    string publishId,
-                                                    string publishTime,
-                                                    Uri sourceRequestUri,
-                                                    string objectId,
-                                                    CancellationToken cancellationToken)
-    {
-        var (type, sourcePart) = CheckEventAndSetProps(@event, sourceRequestUri.Segments[3].TrimEnd('/'));
-        var messageToHook = new MaintenanceEventHook("1.0",
-            type,
-            publishId,
-            publishTime,
-            objectId,
-            sourcePart,
-            data);
-        var maintenanceEvent = new ServiceBusMessage(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(messageToHook)));
-        var properties = new Dictionary<string, object>()
-        {
-            { "filter-property-planning-plant-id", data.GetJsonObjectPropertyValue("planningPlantId").ToString() },
-            { "filter-property-active-status-ids", data.GetJsonObjectPropertyValue("activeStatusIds").ToString() },
-            { "filter-property-work-center-id", data.GetJsonObjectPropertyValue("workCenterId").ToString() },
-            { "filter-property-planner-group-id", data.GetJsonObjectPropertyValue("plannerGroupId").ToString() }
-        };
-        var statuses = data.GetJsonObjectPropertyValueArray("statuses");
-        foreach (var status in statuses)
-        {
-            var sa       = status.AsObject();
-            var id       = sa.GetJsonObjectPropertyValue("statusId").ToString();
-            var isActive = sa.GetJsonObjectPropertyValue("isActive").AsValue();
-            properties.Add($"filter-property-status-{id}-is-active", isActive.ToString());
-        }
+	public async Task<MaintenanceEventHook> Publish(string @event,
+													JsonObject data,
+													string publishId,
+													string publishTime,
+													Uri sourceRequestUri,
+													string objectId,
+													CancellationToken cancellationToken)
+	{
+		var (type, sourcePart) = CheckEventAndSetProps(@event, sourceRequestUri.Segments[3].TrimEnd('/'));
 
-        foreach (var property in properties)
-        {
-            maintenanceEvent.ApplicationProperties.Add(property);
-        }
+		var properties = new Dictionary<string, object>()
+		{
+			{ "filter-property-planning-plant-id", data.GetJsonObjectPropertyValue("PlanningPlantId").ToString() },
+			{ "filter-property-active-status-ids", data.GetJsonObjectPropertyValue("ActiveStatusIds").ToString() },
+			{ "filter-property-work-center-id", data.GetJsonObjectPropertyValue("WorkCenterId").ToString() },
+			{ "filter-property-planner-group-id", data.GetJsonObjectPropertyValue("PlannerGroupId").ToString() }
+		};
+		var statuses = data["Statuses"]?.AsArray() ?? throw new InvalidOperationException("Statuses could not be found in the response data");
+		data.Remove("Statuses");
+		foreach (var status in statuses)
+		{
+            if (status is null) continue;
 
-        var sender = busClient.CreateSender(Names.Topic);
-        await sender.SendMessageAsync(maintenanceEvent, cancellationToken);
-        await sender.CloseAsync(cancellationToken);
-        return messageToHook;
-    }
+            var sa = status.AsObject();
+			var id = sa.GetJsonObjectPropertyValue("StatusId").ToString();
+			var isActive = sa.GetJsonObjectPropertyValue("IsActive").AsValue();
+			properties.Add($"filter-property-status-{id}-is-active", isActive.ToString());
+		}
 
-    private (string, string) CheckEventAndSetProps(string @event, string input)
-    {
-        var sourcePart = "https://equinor.github.io/maintenance-api-event-driven-docs/#tag/{0}";
-        var type       = "com.equinor.maintenance-events.{0}";
-        switch (@event)
-        {
-            case "CREATED":
-                SetMetaData(ref type, ref sourcePart, $"{input}.created");
 
-                break;
-            case "RELEASED":
-                SetMetaData(ref type, ref sourcePart, $"{input}.released");
+		var messageToHook = new MaintenanceEventHook("1.0", type, publishId, publishTime, objectId, sourcePart, data);
 
-                break;
-            case "TECCOMPLETED":
-                SetMetaData(ref type, ref sourcePart, $"{input}.technical-complete");
+		var maintenanceEvent = new ServiceBusMessage(JsonSerializer.SerializeToUtf8Bytes(messageToHook));
 
-                break;
-            case "CLOSED":
-                SetMetaData(ref type, ref sourcePart, $"{input}.completed");
+		foreach (var property in properties)
+		{
+			maintenanceEvent.ApplicationProperties.Add(property);
+		}
 
-                break;
-            case "INPROCESS":
-                SetMetaData(ref type, ref sourcePart, $"{input}.in-process");
+		var sender = busClient.CreateSender(Names.Topic);
+		await sender.SendMessageAsync(maintenanceEvent, cancellationToken);
+		await sender.CloseAsync(cancellationToken);
+		return messageToHook;
+	}
 
-                break;
-        }
+	private (string, string) CheckEventAndSetProps(string @event, string input)
+	{
+		var sourcePart = "https://equinor.github.io/maintenance-api-event-driven-docs/#tag/{0}";
+		var type = "com.equinor.maintenance-events.{0}";
+		switch (@event)
+		{
+			case "CREATED":
+				SetMetaData(ref type, ref sourcePart, $"{input}.created");
 
-        return (type, sourcePart);
-    }
+				break;
+			case "RELEASED":
+				SetMetaData(ref type, ref sourcePart, $"{input}.released");
 
-    private static void SetMetaData(ref string typeInput, ref string sourceInput, string input)
-    {
-        typeInput = string.Format(typeInput, input);
-        sourceInput = string.Format(sourceInput, typeInput);
-    }
+				break;
+			case "TECCOMPLETED":
+				SetMetaData(ref type, ref sourcePart, $"{input}.technical-complete");
+
+				break;
+			case "CLOSED":
+				SetMetaData(ref type, ref sourcePart, $"{input}.completed");
+
+				break;
+			case "INPROCESS":
+				SetMetaData(ref type, ref sourcePart, $"{input}.in-process");
+
+				break;
+		}
+
+		return (type, sourcePart);
+	}
+
+	private static void SetMetaData(ref string typeInput, ref string sourceInput, string input)
+	{
+		typeInput = string.Format(typeInput, input);
+		sourceInput = string.Format(sourceInput, typeInput);
+	}
 }

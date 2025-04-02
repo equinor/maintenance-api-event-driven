@@ -12,6 +12,7 @@ public class WorkOrderClient(HttpClient client) : MaintenanceApiBase(client)
 
     public async Task<HttpResponseMessage> Lookup(string link)
     {
+        link = $"{link}&include-status-details=true";
         return await HttpClient.GetAsync(link);
     }
 }
