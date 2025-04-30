@@ -3,6 +3,8 @@ using Azure.Extensions.AspNetCore.Configuration.Secrets;
 using Azure.Identity;
 using Equinor.Maintenance.API.EventEnhancer.ConfigSections;
 using Equinor.Maintenance.API.EventEnhancer.Constants;
+using Equinor.Maintenance.API.EventEnhancer.EventSourcing;
+using Equinor.Maintenance.API.EventEnhancer.MaintenanceApi.Handlers;
 using Equinor.Maintenance.API.EventEnhancer.Middlewares;
 using Equinor.Maintenance.API.EventEnhancer.Routes;
 using FluentValidation;
@@ -52,13 +54,14 @@ builder.Host.UseSerilog((ctx, svcs, lc) =>
 });
 services.AddScoped<LogOriginHeader>();
 services.AddScoped<IAuthorizationHandler, WebHookOriginHandler>();
+services.AddScoped<MessagePublisher>();
+services.AddScoped<SourceReactor>();
 
 services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddMicrosoftIdentityWebApi(options => config.Bind(Constants.AzureAd, options),
         options =>
         {
             config.Bind(Constants.AzureAd, options);
-            // options.ClientSecret = null;
             options.ClientCertificates =
             [
                 new CertificateDescription
@@ -72,40 +75,53 @@ services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .EnableTokenAcquisitionToCallDownstreamApi(options => config.Bind(Constants.AzureAd, options))
     .AddInMemoryTokenCaches();
 
-services.AddHttpClient(Names.MainteanceApi,
+services.AddTransient<MaintenanceApiTokenHandler>();
+
+services.AddHttpClient(Names.MaintenanceApi,
         cli => cli.BaseAddress = new Uri(config.GetConnectionString(nameof(ConnectionStrings.MaintenanceApi))))
-    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false })
+    .AddHttpMessageHandler<MaintenanceApiTokenHandler>();
 
 
 services.AddAuthorizationBuilder()
     .AddPolicy(Policy.Publish, policyBuilder =>
-        {
-            policyBuilder.RequireRole(Role.Publish);
-            policyBuilder.RequireClaim(JwtRegisteredClaimNames.Azp,
-                config.GetSection("AllowedClients")
-                    .AsEnumerable()
-                    .Where(pair => !string.IsNullOrWhiteSpace(pair.Value))
-                    .Select(pair => pair.Value)!);
-        })
-    .AddPolicy(Policy.WebHookOrigin, policyBuilder =>
-        {
-            policyBuilder.AddRequirements(new WebHookOriginRequirement(config
-                .GetSection("AzureAd:AllowedWebHookOrigins")
+    {
+        policyBuilder.RequireRole(Role.Publish);
+        policyBuilder.RequireClaim(JwtRegisteredClaimNames.Azp,
+            config.GetSection("AllowedClients")
                 .AsEnumerable()
                 .Where(pair => !string.IsNullOrWhiteSpace(pair.Value))
-                .Select(pair => pair.Value!)
-                .ToArray()));
-        });
+                .Select(pair => pair.Value)!);
+    })
+    .AddPolicy(Policy.WebHookOrigin, policyBuilder =>
+    {
+        policyBuilder.AddRequirements(new WebHookOriginRequirement(config
+            .GetSection("AzureAd:AllowedWebHookOrigins")
+            .AsEnumerable()
+            .Where(pair => !string.IsNullOrWhiteSpace(pair.Value))
+            .Select(pair => pair.Value!)
+            .ToArray()));
+    });
 
 services.AddAzureClients(clientBuilder =>
 {
     clientBuilder.AddServiceBusClient(config.GetConnectionString(nameof(ConnectionStrings.ServiceBus)));
 });
 services.AddMediatR(typeof(Program));
-
+services.AddProblemDetails();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
+if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Sandbox"))
+{
+    app.UseDeveloperExceptionPage(); // Detailed error page for non-production environments
+}
+else
+{
+    app.UseExceptionHandler();
+    app.UseHsts(); // Enforce strict transport security in production
+}
+
 app.UseSerilogRequestLogging(opts =>
 {
     opts.EnrichDiagnosticContext = (context, httpContext) =>
@@ -116,6 +132,7 @@ app.UseSerilogRequestLogging(opts =>
     };
     opts.MessageTemplate = "HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000} ms {Identity}";
 });
+
 app.UseMiddleware<LogOriginHeader>();
 app.UseHttpsRedirection();
 
@@ -123,6 +140,5 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapMaintenanceEventRoutes();
-
 
 app.Run();

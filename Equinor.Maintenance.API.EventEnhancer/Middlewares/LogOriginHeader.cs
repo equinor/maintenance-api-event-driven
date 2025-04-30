@@ -16,10 +16,6 @@ public class LogOriginHeader(ILogger<LogOriginHeader> logger) : IMiddleware
         {
             await next.Invoke(context);
         }
-        catch (Exception e)
-        {
-            logger.LogError(e.Message);
-        }
         finally
         {
             request.Body.Position = 0;

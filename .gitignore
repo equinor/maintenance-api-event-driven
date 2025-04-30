@@ -3,3 +3,10 @@
 /Equinor.Maintenance.API.EventEnhancer/obj
 /Equinor.Maintenance.API.EventEnhancer/.idea
 out/
+.DS_Store
+.github/.DS_Store
+.vscode/launch.json
+.vscode/tasks.json
+Equinor.Maintenance.API.EventEnhancer/.DS_Store
+Equinor.Maintenance.API.EventEnhancer/Folder.DotSettings.user
+Equinor.Maintenance.API.EventEnhancer/MaintenanceApi/.DS_Store

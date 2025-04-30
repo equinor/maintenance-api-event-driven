@@ -5,7 +5,7 @@ public static class Names
     public const string WebHookRequestHeader = "Webhook-Request-Origin";
     public const string WebHookAllowHeader = "Webhook-Allowed-Origin";
     public const string Topic = "maintenance-events";
-    public const string MainteanceApi = "MaintenanceApiServiceName";
+    public const string MaintenanceApi = "MaintenanceApiServiceName";
 }
 
 public static class Policy
