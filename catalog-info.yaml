@@ -1,0 +1,33 @@
+﻿apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: maintenance-api-event-driven
+  title: Event-driven Maintenance API (Event Enhancer)
+  description: >-
+    Event Enhancer for the Event-driven Maintenance API. Enriches maintenance
+    events emitted by SAP using the Maintenance API and publishes them to Azure
+    Service Bus for consumer solutions to subscribe and react to. Companion to
+    the synchronous REST Maintenance API. Radix declares sandbox, test and qa
+    environments only; there is no production environment.
+  annotations:
+    github.com/project-slug: equinor/maintenance-api-event-driven
+  tags:
+    - apiphany
+    - maintenance-api
+    - event-driven
+    - dotnet
+    - radix
+  links:
+    - url: https://equinor.github.io/maintenance-api-event-driven-docs/
+      title: Event-driven Maintenance API docs
+      icon: docs
+    - url: https://github.com/equinor/maintenance-api-event-driven
+      title: GitHub repository
+      icon: github
+spec:
+  type: service
+  lifecycle: deprecated
+  owner: group:default/team-apiphany
+  system: system:default/apiphany
+  consumesApis:
+    - api:default/maintenance-api
