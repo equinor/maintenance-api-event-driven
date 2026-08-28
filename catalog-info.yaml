@@ -29,7 +29,5 @@ spec:
   lifecycle: deprecated
   owner: group:default/team-apiphany
   system: system:default/apiphany
-  providesApis:
-    - api:default/maintenance-api-event-driven
   consumesApis:
     - api:default/maintenance-api
