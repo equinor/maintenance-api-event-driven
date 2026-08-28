@@ -1,0 +1,25 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: maintenance-api-event-driven
+  description: Event-driven Maintenance API component that enriches SAP maintenance events and publishes them for consumers.
+  annotations:
+    github.com/project-slug: equinor/maintenance-api-event-driven
+  tags:
+    - apiphany
+    - maintenance-api
+    - event-driven
+  links:
+    - url: https://github.com/equinor/maintenance-api-event-driven
+      title: GitHub repository
+      icon: github
+    - url: https://equinor.github.io/maintenance-api-event-driven-docs/
+      title: Event-driven Maintenance API docs
+      icon: docs
+spec:
+  type: service
+  lifecycle: deprecated
+  owner: group:default/team-apiphany
+  system: system:default/apiphany
+  consumesApis:
+    - api:default/maintenance-api
